@@ -75,6 +75,7 @@ static struct tcp_proxy_t {
 	int sock_peer; /* Socket descriptor for peer. */
 	int role; /* Client or Server proxy */
 	bool datamode; /* Data mode flag*/
+	uint16_t timeout; /* Peer connection timeout */
 } proxy;
 
 /* global functions defined in different files */
@@ -386,7 +387,8 @@ static int do_tcp_send(const uint8_t *data, int datalen)
 
 	/* restart activity timer */
 	if (proxy.role == AT_TCP_ROLE_SERVER) {
-		k_timer_start(&conn_timer, K_SECONDS(CONFIG_SLM_TCP_CONN_TIME),
+		LOG_ERR("do_tcp_send: Restart timer:%d", proxy.timeout);
+		k_timer_start(&conn_timer, K_SECONDS(proxy.timeout),
 			K_NO_WAIT);
 	}
 
@@ -427,7 +429,8 @@ static int do_tcp_send_datamode(const uint8_t *data, int datalen)
 
 	/* restart activity timer */
 	if (proxy.role == AT_TCP_ROLE_SERVER) {
-		k_timer_start(&conn_timer, K_SECONDS(CONFIG_SLM_TCP_CONN_TIME),
+		LOG_ERR("do_tcp_send_datamode: Restart timer:%d", proxy.timeout);
+		k_timer_start(&conn_timer, K_SECONDS(proxy.timeout),
 			K_NO_WAIT);
 	}
 
@@ -459,12 +462,14 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 	ring_buf_reset(&data_buf);
 	while (true) {
 		if (proxy.role == AT_TCP_ROLE_SERVER &&
+			proxy.timeout > 0 &&
 			k_timer_status_get(&conn_timer) > 0) {
 			k_timer_stop(&conn_timer);
 			LOG_INF("Connecion timeout");
 			sprintf(rsp_buf, "#XTCPSVR: timeout\r\n");
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			close(proxy.sock_peer);
+			proxy.sock_peer = INVALID_SOCKET;
 		}
 		ret = poll(fds, nfds, MSEC_PER_SEC * CONFIG_SLM_TCP_POLL_TIME);
 		if (ret < 0) {  /* IO error */
@@ -487,6 +492,7 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 				sprintf(rsp_buf, "#XTCPSVR: disconnected\r\n");
 				rsp_send(rsp_buf, strlen(rsp_buf));
 				close(fds[i].fd);
+				proxy.sock_peer = INVALID_SOCKET;
 				fds[i].fd = INVALID_SOCKET;
 				nfds--;
 				k_timer_stop(&conn_timer);
@@ -537,7 +543,7 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 					fds[nfds].events = POLLIN;
 					nfds++;
 					/* Start a one-shot timer to close the connection */
-					k_timer_start(&conn_timer, K_SECONDS(CONFIG_SLM_TCP_CONN_TIME), K_NO_WAIT);
+					k_timer_start(&conn_timer, K_SECONDS(proxy.timeout), K_NO_WAIT);
 					break;
 				} else {
 					char data[NET_IPV4_MTU];
@@ -580,7 +586,13 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 						}
 						rsp_send(rsp_buf, strlen(rsp_buf));
 					}
+					/* Restart conn timer */
 					k_timer_stop(&conn_timer);
+					LOG_ERR("restart timer: POLLIN");
+					k_timer_start(
+						&conn_timer,
+						K_SECONDS(proxy.timeout),
+						K_NO_WAIT);
 				}
 			}
 		}
@@ -662,7 +674,7 @@ static void tcpcli_thread_func(void *p1, void *p2, void *p3)
 }
 
 /**@brief handle AT#XTCPSVR commands
- *  AT#XTCPSVR=<op>[,<port>[,[sec_tag]]
+ *  AT#XTCPSVR=<op>[,<port>,<timeout>,[sec_tag]]
  *  AT#XTCPSVR?
  *  AT#XTCPSVR=?
  */
@@ -692,13 +704,18 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 				LOG_ERR("Server is already running.");
 				return -EINVAL;
 			}
+			slm_at_tcp_proxy_init();
 			err = at_params_short_get(&at_param_list, 2, &port);
 			if (err) {
 				return err;
 			}
-			slm_at_tcp_proxy_init();
-			if (param_count > 3) {
-				at_params_int_get(&at_param_list, 3,
+			err = at_params_short_get(&at_param_list, 3,
+						  &proxy.timeout);
+			if (err) {
+				return err;
+			}
+			if (param_count > 4) {
+				at_params_int_get(&at_param_list, 4,
 						  &proxy.sec_tag);
 			}
 			err = do_tcp_server_start(port, proxy.sec_tag);
@@ -716,8 +733,8 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 	case AT_CMD_TYPE_READ_COMMAND:
 		if (proxy.sock != INVALID_SOCKET &&
 		    proxy.role == AT_TCP_ROLE_SERVER) {
-			sprintf(rsp_buf, "#XTCPSVR: %d, %d, %d\r\n",
-				proxy.sock, proxy.sock_peer, proxy.datamode);
+			sprintf(rsp_buf, "#XTCPSVR: %d, %d, %d, %d\r\n",
+				proxy.sock, proxy.sock_peer, proxy.timeout, proxy.datamode);
 		} else {
 			sprintf(rsp_buf, "#XTCPSVR: %d, %d\r\n",
 				INVALID_SOCKET, INVALID_SOCKET);
@@ -727,7 +744,7 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 		break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "#XTCPSVR: (%d, %d, %d),<port>,<sec_tag>\r\n",
+		sprintf(rsp_buf, "#XTCPSVR: (%d, %d, %d),<port>,<timeout>,<sec_tag>\r\n",
 			AT_SERVER_STOP, AT_SERVER_START,
 			AT_SERVER_START_WITH_DATAMODE);
 		rsp_send(rsp_buf, strlen(rsp_buf));
@@ -960,6 +977,7 @@ int slm_at_tcp_proxy_init(void)
 	proxy.sock_peer = INVALID_SOCKET;
 	proxy.role = INVALID_ROLE;
 	proxy.datamode = false;
+	proxy.timeout = 0;
 	proxy.sec_tag = INVALID_SEC_TAG;
 
 	return 0;
