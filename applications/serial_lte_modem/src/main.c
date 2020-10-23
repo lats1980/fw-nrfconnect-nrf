@@ -20,6 +20,7 @@
 #include <dfu/mcuboot.h>
 #include <power/reboot.h>
 #include "slm_at_host.h"
+#include "slm_ui.h"
 
 LOG_MODULE_REGISTER(app, CONFIG_SLM_LOG_LEVEL);
 
@@ -179,6 +180,12 @@ void start_execute(void)
 	err = slm_at_host_init();
 	if (err) {
 		LOG_ERR("Failed to init at_host: %d", err);
+		return;
+	}
+
+	err = slm_ui_init();
+	if (err) {
+		LOG_ERR("Failed to init ui: %d", err);
 		return;
 	}
 

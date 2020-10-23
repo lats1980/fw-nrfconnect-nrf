@@ -27,6 +27,10 @@ config SLM_AT_MAX_PARAM
 config SLM_NATIVE_TLS
 	bool "Use Zephyr mbedTLS"
 
+config SLM_UI
+	bool "Enable SLM UI"
+	default y
+
 #
 # Inter-Connect
 #
