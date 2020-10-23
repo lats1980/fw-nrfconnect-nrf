@@ -26,13 +26,11 @@ static void leds_update(struct k_work *work)
 		err = dk_set_leds_state(DK_NO_LEDS_MSK, DK_ALL_LEDS_MSK);
 		if (err) {
 			LOG_ERR("Could not set leds state, err code: %d", err);
-			return err;
 		}
 	} else {
 		err = dk_set_leds_state(DK_ALL_LEDS_MSK, DK_NO_LEDS_MSK);
 		if (err) {
 			LOG_ERR("Could not set leds state, err code: %d", err);
-			return err;
 		}
 	}
 
@@ -49,8 +47,6 @@ static void leds_update(struct k_work *work)
 
 static void lte_handler(const struct lte_lc_evt *const evt)
 {
-	LOG_INF("lte_handler!!!");
-#if 0
 	switch (evt->type) {
 	case LTE_LC_EVT_NW_REG_STATUS:
 		if (evt->nw_reg_status == LTE_LC_NW_REG_UICC_FAIL) {
@@ -60,6 +56,7 @@ static void lte_handler(const struct lte_lc_evt *const evt)
 			LOG_INF("Network registration status: %s",
 			evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
 			"Connected - home network" : "Connected - roaming");
+			ui_led_set_pattern(UI_LTE_CONNECTED);
 		}
 		break;
 	case LTE_LC_EVT_PSM_UPDATE:
@@ -90,7 +87,16 @@ static void lte_handler(const struct lte_lc_evt *const evt)
 	default:
 		break;
 	}
-#endif
+}
+
+void ui_led_set_pattern(enum ui_led_pattern state)
+{
+	current_led_state = state;
+}
+
+enum ui_led_pattern ui_led_get_pattern(void)
+{
+	return current_led_state;
 }
 
 int slm_ui_init(void)
