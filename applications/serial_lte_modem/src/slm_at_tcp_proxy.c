@@ -27,8 +27,10 @@ LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
 enum slm_tcp_proxy_operation {
 	AT_SERVER_STOP,
 	AT_CLIENT_DISCONNECT = AT_SERVER_STOP,
+	AT_WHITELIST_CLEAR =  AT_SERVER_STOP,
 	AT_SERVER_START,
 	AT_CLIENT_CONNECT = AT_SERVER_START,
+	AT_WHITELIST_SET =  AT_SERVER_START,
 	AT_SERVER_START_WITH_DATAMODE,
 	AT_CLIENT_CONNECT_WITH_DATAMODE = AT_SERVER_START_WITH_DATAMODE
 };
@@ -41,6 +43,7 @@ enum slm_tcp_proxy_role {
 
 /**@brief List of supported AT commands. */
 enum slm_tcp_proxy_at_cmd_type {
+	AT_TCP_WHITELIST,
 	AT_TCP_SERVER,
 	AT_TCP_CLIENT,
 	AT_TCP_SEND,
@@ -48,7 +51,15 @@ enum slm_tcp_proxy_at_cmd_type {
 	AT_TCP_PROXY_MAX
 };
 
+/**@brief Action towards client out of whitelist. */
+enum slm_tcp_whitelist_action {
+	AT_TCP_ACTION_NONE,
+	AT_TCP_ACTION_DISCONNECT,
+	AT_TCP_ACTION_DROPDATA
+};
+
 /** forward declaration of cmd handlers **/
+static int handle_at_tcp_whitelist(enum at_cmd_type cmd_type);
 static int handle_at_tcp_server(enum at_cmd_type cmd_type);
 static int handle_at_tcp_client(enum at_cmd_type cmd_type);
 static int handle_at_tcp_send(enum at_cmd_type cmd_type);
@@ -56,6 +67,7 @@ static int handle_at_tcp_recv(enum at_cmd_type cmd_type);
 
 /**@brief SLM AT Command list type. */
 static slm_at_cmd_list_t tcp_proxy_at_list[AT_TCP_PROXY_MAX] = {
+	{AT_TCP_WHITELIST, "AT#XTCPWHTLST", handle_at_tcp_whitelist},
 	{AT_TCP_SERVER, "AT#XTCPSVR", handle_at_tcp_server},
 	{AT_TCP_CLIENT, "AT#XTCPCLI", handle_at_tcp_client},
 	{AT_TCP_SEND, "AT#XTCPSEND", handle_at_tcp_send},
@@ -64,6 +76,8 @@ static slm_at_cmd_list_t tcp_proxy_at_list[AT_TCP_PROXY_MAX] = {
 
 RING_BUF_DECLARE(data_buf, CONFIG_AT_CMD_RESPONSE_MAX_LEN / 2);
 static uint8_t data_hex[DATA_HEX_MAX_SIZE];
+static char ip_whitelist[CONFIG_SLM_WHITELIST_SIZE][INET_ADDRSTRLEN];
+static int whitelist_action;
 static struct k_thread tcp_thread;
 static K_THREAD_STACK_DEFINE(tcp_thread_stack, THREAD_STACK_SIZE);
 K_TIMER_DEFINE(conn_timer, NULL, NULL);
@@ -73,6 +87,7 @@ static struct tcp_proxy_t {
 	int sock; /* Socket descriptor. */
 	sec_tag_t sec_tag; /* Security tag of the credential */
 	int sock_peer; /* Socket descriptor for peer. */
+	bool whitelisted; /* peer in whitelist */
 	int role; /* Client or Server proxy */
 	bool datamode; /* Data mode flag*/
 	uint16_t timeout; /* Peer connection timeout */
@@ -521,6 +536,8 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 					}
 					/* Accept incoming connection */;
 					LOG_DBG("Accept connection...");
+					proxy.sock_peer = INVALID_SOCKET;
+					proxy.whitelisted = false;
 					ret = accept(proxy.sock,
 						     (struct sockaddr *)&remote, &len);
 					if (ret < 0) {
@@ -530,12 +547,31 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 					} else {
 						LOG_DBG("accept(): %d", ret);
 					}
+					/* Whitelist filtering */
 					if (inet_ntop(AF_INET, &remote.sin_addr, peer_addr,
-						INET_ADDRSTRLEN) != NULL) {
-						sprintf(rsp_buf, "#XTCPSVR: %s connected\r\n",
+						INET_ADDRSTRLEN) == NULL) {
+						LOG_ERR("inet_ntop() failed: %d", -errno);
+						do_tcp_server_stop(-errno);
+						return;
+					}
+					for (int i = 0; i < CONFIG_SLM_WHITELIST_SIZE; i++) {
+						if (strcmp(ip_whitelist[i], peer_addr) == 0) {
+							proxy.whitelisted = true;
+							break;
+						}
+					}
+					if (!proxy.whitelisted &&
+			    		    whitelist_action == AT_TCP_ACTION_DISCONNECT) {
+						LOG_INF("Connection from %s filtered", peer_addr);
+						sprintf(rsp_buf, "#XTCPSVR: %s filtered\r\n",
 							peer_addr);
 						rsp_send(rsp_buf, strlen(rsp_buf));
+						close(ret);
+						continue;
 					}
+					sprintf(rsp_buf, "#XTCPSVR: %s connected\r\n",
+						peer_addr);
+					rsp_send(rsp_buf, strlen(rsp_buf));
 					proxy.sock_peer = ret;
 					LOG_DBG("New connection - %d",
 						proxy.sock_peer);
@@ -671,6 +707,94 @@ static void tcpcli_thread_func(void *p1, void *p2, void *p3)
 			}
 		}
 	}
+}
+
+/**@brief handle AT#XTCPWHITELIST commands
+ *  AT#XTCPWHTLST=<op>[,<action>,<IP_ADDR#1>[,<IP_ADDR#2>[,...]]]
+ *  AT#XTCPWHTLST?
+ *  AT#XTCPWHTLST=?
+ */
+static int handle_at_tcp_whitelist(enum at_cmd_type cmd_type)
+{
+	int err = -EINVAL;
+	uint16_t op;
+	int param_count = at_params_valid_count_get(&at_param_list);
+
+	switch (cmd_type) {
+	case AT_CMD_TYPE_SET_COMMAND:
+		err = at_params_short_get(&at_param_list, 1, &op);
+		if (err) {
+			return err;
+		}
+		if (op == AT_WHITELIST_SET) {
+			char address[INET_ADDRSTRLEN];
+			int size;
+
+			if (param_count > (CONFIG_SLM_WHITELIST_SIZE + 3)){
+				return -EINVAL;
+			}
+			err = at_params_int_get(&at_param_list, 2,
+					&whitelist_action);
+			if (err) {
+				return err;
+			}
+			if (whitelist_action != AT_TCP_ACTION_DISCONNECT &&
+			    whitelist_action != AT_TCP_ACTION_DROPDATA) {
+				return -EINVAL;
+			}
+			for (int i = 0; i < CONFIG_SLM_WHITELIST_SIZE; i++) {
+				memset(ip_whitelist[i], 0x00, INET_ADDRSTRLEN);
+			}
+			for (int i = 3; i < param_count; i++) {
+				size = INET_ADDRSTRLEN;
+				err = at_params_string_get(&at_param_list, i,
+					address, &size);
+				if (err) {
+					return err;
+				} else if (!check_for_ipv4(address, size)) {
+					return -EINVAL;
+				} else {
+					memcpy(ip_whitelist[i-3], address,
+						size);
+				}
+			}
+			err = 0;
+		} else if (op == AT_WHITELIST_CLEAR) {
+			for (int i = 0; i < CONFIG_SLM_WHITELIST_SIZE; i++) {
+				memset(ip_whitelist[i], 0x00, INET_ADDRSTRLEN);
+			}
+			whitelist_action = AT_TCP_ACTION_NONE;
+			err = 0;
+		} break;
+
+	case AT_CMD_TYPE_READ_COMMAND:
+		sprintf(rsp_buf, "#XTCPWHTLST: %d", whitelist_action);
+		for (int i = 0; i < CONFIG_SLM_WHITELIST_SIZE; i++) {
+			if (strlen(ip_whitelist[i]) > 0) {
+				strcat(rsp_buf, ",\"");
+				strcat(rsp_buf, ip_whitelist[i]);
+				strcat(rsp_buf, "\"");
+			}
+		}
+		strcat(rsp_buf, "\r\n");
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		err = 0;
+		break;
+
+	case AT_CMD_TYPE_TEST_COMMAND:
+		sprintf(rsp_buf, "#XTCPWHTLST: (%d, %d),(%d, %d)",
+			AT_WHITELIST_CLEAR, AT_WHITELIST_SET,
+			AT_TCP_ACTION_DISCONNECT, AT_TCP_ACTION_DROPDATA);
+		strcat(rsp_buf, ",<IP_ADDR#1>[,<IP_ADDR#2>[,...]]\r\n");
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		err = 0;
+		break;
+
+	default:
+		break;
+	}
+
+	return err;
 }
 
 /**@brief handle AT#XTCPSVR commands
@@ -979,6 +1103,10 @@ int slm_at_tcp_proxy_init(void)
 	proxy.datamode = false;
 	proxy.timeout = 0;
 	proxy.sec_tag = INVALID_SEC_TAG;
+	for (int i = 0; i < CONFIG_SLM_WHITELIST_SIZE; i++) {
+		memset(ip_whitelist[i], 0x00, INET_ADDRSTRLEN);
+	}
+	whitelist_action = AT_TCP_ACTION_NONE;
 
 	return 0;
 }

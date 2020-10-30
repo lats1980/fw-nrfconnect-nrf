@@ -18,7 +18,7 @@ config SLM_AT_MODE
 
 config SLM_AT_MAX_PARAM
 	int "Maximum number of parameters in AT command"
-	default 9
+	default 10
 
 config SLM_NATIVE_TLS
 	bool "Use Zephyr mbedTLS"
@@ -85,6 +85,11 @@ config SLM_INTERFACE_PIN
 #
 # TCP/TLS proxy
 #
+config SLM_WHITELIST_SIZE
+	int "Size of whitelist to filter incoming connections"
+	range 1 10
+	default 6
+
 config SLM_TCP_POLL_TIME
 	int "Poll timeout in seconds for TCP connection"
 	default 10
