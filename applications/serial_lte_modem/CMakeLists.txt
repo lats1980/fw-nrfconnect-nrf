@@ -34,6 +34,8 @@ target_sources(app PRIVATE src/slm_at_icmp.c)
 target_sources(app PRIVATE src/slm_at_fota.c)
 target_sources_ifdef(CONFIG_SLM_NATIVE_TLS app PRIVATE src/slm_native_tls.c)
 target_sources_ifdef(CONFIG_SLM_NATIVE_TLS app PRIVATE src/slm_at_cmng.c)
+target_sources_ifdef(CONFIG_SLM_UI app PRIVATE src/slm_ui.c)
+target_sources_ifdef(CONFIG_SLM_DIAG app PRIVATE src/slm_diag.c)
 
 add_subdirectory(src/gps)
 add_subdirectory(src/ftp_c)

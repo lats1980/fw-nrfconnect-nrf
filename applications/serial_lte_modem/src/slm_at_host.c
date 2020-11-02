@@ -39,6 +39,12 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #if defined(CONFIG_SLM_HTTPC)
 #include "slm_at_httpc.h"
 #endif
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
+#if defined(CONFIG_SLM_DIAG)
+#include "slm_diag.h"
+#endif
 
 #define OK_STR		"OK\r\n"
 #define ERROR_STR	"ERROR\r\n"
@@ -762,6 +768,21 @@ int slm_at_host_init(void)
 		return -EFAULT;
 	}
 #endif
+#if defined(CONFIG_SLM_UI)
+	err = slm_ui_init();
+	if (err) {
+		LOG_ERR("Failed to init ui: %d", err);
+		return -EFAULT;
+	}
+#endif
+#if defined(CONFIG_SLM_DIAG)
+	err = slm_diag_init();
+	if (err) {
+		LOG_ERR("Failed to init diagnostic: %d", err);
+		return -EFAULT;
+	}
+#endif
+
 	k_work_init(&cmd_send_work, cmd_send);
 	k_sem_give(&tx_done);
 	rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);

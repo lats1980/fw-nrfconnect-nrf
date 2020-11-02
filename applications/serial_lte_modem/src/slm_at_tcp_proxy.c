@@ -14,6 +14,9 @@
 #include "slm_native_tls.h"
 #include "slm_at_host.h"
 #include "slm_at_tcp_proxy.h"
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
 
 LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
 
@@ -592,6 +595,15 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 					if (ret == 0) {
 						continue;
 					}
+#if defined(CONFIG_SLM_UI)
+					if (ret < NET_IPV4_MTU/3) {
+						ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+					} else if (ret < 2*NET_IPV4_MTU/3) {
+						ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+					} else {
+						ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+					}
+#endif
 					if (proxy.datamode) {
 						rsp_send(data, ret);
 					} else if (slm_util_hex_check(data, ret)) {
@@ -675,6 +687,15 @@ static void tcpcli_thread_func(void *p1, void *p2, void *p3)
 			if (ret == 0) {
 				continue;
 			}
+#if defined(CONFIG_SLM_UI)
+			if (ret < NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (ret < 2*NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
+#endif
 			if (proxy.datamode) {
 				rsp_send(data, ret);
 			} else if (slm_util_hex_check(data, ret)) {
@@ -1078,6 +1099,17 @@ int slm_at_tcp_proxy_parse(const char *at_cmd, uint16_t length)
 	/* handle sending in data mode */
 	if (ret == -ENOENT && proxy.datamode) {
 		ret = do_tcp_send_datamode(at_cmd, length);
+		if (ret > 0) {
+#if defined(CONFIG_SLM_UI)
+			if (ret < NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (ret < 2*NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
+#endif
+		}
 	}
 
 	return ret;

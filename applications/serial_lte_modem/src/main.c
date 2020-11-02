@@ -20,6 +20,9 @@
 #include <dfu/mcuboot.h>
 #include <power/reboot.h>
 #include "slm_at_host.h"
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
 
 LOG_MODULE_REGISTER(app, CONFIG_SLM_LOG_LEVEL);
 
