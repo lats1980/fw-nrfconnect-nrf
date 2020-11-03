@@ -362,7 +362,7 @@ static void cmd_send(struct k_work *work)
 		rsp_send(OK_STR, sizeof(OK_STR) - 1);
 		k_sleep(K_MSEC(50));
 		slm_at_host_uninit();
-		enter_sleep(false);
+		//enter_sleep(false);
 		sys_reboot(SYS_REBOOT_COLD);
 	}
 
