@@ -249,6 +249,7 @@ static int do_tcp_server_stop(int error)
 		}
 		rsp_send(rsp_buf, strlen(rsp_buf));
 	}
+	proxy.datamode = false;
 
 	return ret;
 }
