@@ -677,6 +677,14 @@ static void tcpcli_thread_func(void *p1, void *p2, void *p3)
 			LOG_INF("TCP client closed.");
 			return;
 		}
+                if ((fds.revents & POLLHUP) == POLLHUP) {
+                        LOG_INF("Peer disconnect:%d", sock);
+                        sprintf(rsp_buf, "#XTCPCLI: disconnected\r\n");
+                        rsp_send(rsp_buf, strlen(rsp_buf));
+                        close(sock);
+                        proxy.sock = INVALID_SOCKET;
+                        return;
+                }
 		if ((fds.revents & POLLIN) == POLLIN) {
 			char data[NET_IPV4_MTU];
 
