@@ -546,8 +546,7 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 						     (struct sockaddr *)&remote, &len);
 					if (ret < 0) {
 						LOG_ERR("accept() failed: %d", -errno);
-						do_tcp_server_stop(-errno);
-						return;
+						continue;
 					} else {
 						LOG_DBG("accept(): %d", ret);
 					}
