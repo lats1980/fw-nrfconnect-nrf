@@ -485,7 +485,7 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 			k_timer_status_get(&conn_timer) > 0) {
 			k_timer_stop(&conn_timer);
 			LOG_INF("Connecion timeout");
-			sprintf(rsp_buf, "#XTCPSVR: timeout\r\n");
+			sprintf(rsp_buf, "#XTCPSVR: %d timeout\r\n", -ETIME);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			close(proxy.sock_peer);
 			proxy.sock_peer = INVALID_SOCKET;
