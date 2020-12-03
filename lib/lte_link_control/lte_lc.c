@@ -186,6 +186,7 @@ static const char thingy91_magpio[] = {
 #endif /* !CONFIG_BSD_LIBRARY_SYS_INIT && CONFIG_BOARD_THINGY91_NRF9160NS */
 
 static struct k_sem link;
+static K_SEM_DEFINE(link, 0, 1);
 
 #if defined(CONFIG_LTE_PDP_CMD)
 static char cgdcont[144] = "AT+CGDCONT="CONFIG_LTE_PDP_CONTEXT;
@@ -646,8 +647,6 @@ static int w_lte_lc_connect(bool blocking)
 		LOG_ERR("The LTE link controller is not initialized");
 		return -EPERM;
 	}
-
-	k_sem_init(&link, 0, 1);
 
 	do {
 		retry = false;
