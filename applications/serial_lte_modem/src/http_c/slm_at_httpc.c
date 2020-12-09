@@ -45,6 +45,14 @@ enum slm_httpccon_operation {
 	AT_HTTPCCON_CONNECT
 };
 
+/**@brief HTTP client state */
+enum httpc_state {
+	HTTPC_INIT,
+	HTTPC_REQ_DONE,
+	HTTPC_RES_HEADER_DONE,
+	HTTPC_COMPLETE
+};
+
 /** forward declaration of cmd handlers **/
 static int handle_AT_HTTPC_CONNECT(enum at_cmd_type cmd_type);
 static int handle_AT_HTTPC_REQUEST(enum at_cmd_type cmd_type);
@@ -68,7 +76,7 @@ static struct slm_httpc_ctx {
 	size_t pl_len;			/* payload length */
 	size_t pl_to_send;		/* payload to send to server */
 	ssize_t pl_sent;		/* payload sent to server */
-	bool rsp_completed;		/* inticator of completed response */
+	enum httpc_state state;		/* HTTPC state */
 } httpc;
 
 /* global functions defined in different resources */
@@ -272,31 +280,58 @@ static void response_cb(struct http_response *rsp,
 			enum http_final_call final_data,
 			void *user_data)
 {
-	static size_t data_received;
-
 	if (rsp->data_len > HTTPC_BUF_LEN) {
 		/* Increase HTTPC_BUF_LEN in case of overflow */
 		LOG_WRN("HTTP parser buffer overflow!");
 		return;
 	}
 
-	data_received += rsp->data_len;
-	if (final_data == HTTP_DATA_MORE) {
-		LOG_DBG("Partial data received (%zd bytes)", rsp->data_len);
-		if (data_received == HTTPC_BUF_LEN) {
-			sprintf(rsp_buf, "#XHTTPCRSP:%d,1\r\n",
-				HTTPC_BUF_LEN);
-			rsp_send(rsp_buf, strlen(rsp_buf));
-			rsp_send(data_buf, HTTPC_BUF_LEN);
-			data_received = 0;
-		}
-	} else if (final_data == HTTP_DATA_FINAL) {
-		LOG_DBG("All the data received (%zd bytes)", data_received);
-		sprintf(rsp_buf, "#XHTTPCRSP:%d,0\r\n", data_received);
+	if (final_data == HTTP_DATA_FINAL) {
+		LOG_DBG("All the data received (%zd bytes)", rsp->data_len);
+		sprintf(rsp_buf, "#XHTTPCRSP:0,0\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
-		rsp_send(data_buf, data_received);
-		httpc.rsp_completed = true;
-		data_received = 0;
+		httpc.state = HTTPC_COMPLETE;
+		return;
+	}
+	LOG_DBG("Partial data received (%zd bytes)", rsp->data_len);
+
+	/* Process response header if required */
+	if (httpc.state == HTTPC_REQ_DONE) {
+		/* Look for end of response header */
+		const uint8_t* header_end = "\r\n\r\n";
+		uint8_t *pch;
+		pch = strstr(data_buf, header_end);
+		if (!pch) {
+			LOG_WRN("Invalid HTTP header");
+			return;
+		}
+		sprintf(rsp_buf, "#XHTTPCRSP:%d,1\r\n",
+				pch - data_buf + 4);
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		rsp_send(data_buf, pch - data_buf + 4);
+		/* Process response body of required */
+		if (rsp->body_start) {
+			sprintf(rsp_buf, "#XHTTPCRSP:%d,1\r\n",
+				rsp->data_len - (rsp->body_start - data_buf));
+			rsp_send(rsp_buf, strlen(rsp_buf));
+			rsp_send(rsp->body_start,
+				 rsp->data_len - (rsp->body_start - data_buf));
+		}
+		httpc.state = HTTPC_RES_HEADER_DONE;
+		return;
+	}
+
+	/* Process response body */
+	if (rsp->body_start) {
+		/* Response body starts from the middle of receive buffer */
+		sprintf(rsp_buf, "#XHTTPCRSP:%d,1\r\n", rsp->data_len);
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		rsp_send(rsp->body_start, rsp->data_len);
+	} else {
+		/* Response body starts from the begining of receive buffer */
+		sprintf(rsp_buf, "#XHTTPCRSP:%d,1\r\n", rsp->data_len);
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		rsp_send(data_buf, rsp->data_len);
 	}
 }
 
@@ -367,6 +402,7 @@ static int payload_cb(int sock, struct http_request *req, void *user_data)
 		sprintf(rsp_buf, "#XHTTPCREQ:0\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
 	}
+	httpc.state = HTTPC_REQ_DONE;
 
 	return total_sent;
 }
@@ -468,7 +504,7 @@ static int do_http_request(void)
 		/* Socket send/recv error */
 		sprintf(rsp_buf, "#XHTTPCREQ:%d\r\n", err);
 		rsp_send(rsp_buf, strlen(rsp_buf));
-	} else if (httpc.rsp_completed == false) {
+	} else if (httpc.state != HTTPC_COMPLETE) {
 		/* Socket was closed by remote */
 		err = -ECONNRESET;
 		sprintf(rsp_buf, "#XHTTPCRSP:0,%d\r\n", err);
@@ -476,6 +512,7 @@ static int do_http_request(void)
 	} else {
 		err = 0;
 	}
+	httpc.state = HTTPC_INIT;
 
 	return err;
 }
@@ -594,6 +631,11 @@ static int handle_AT_HTTPC_REQUEST(enum at_cmd_type cmd_type)
 
 	if (httpc.fd == INVALID_SOCKET) {
 		LOG_ERR("Remote host is not connected.");
+		return err;
+	}
+
+	if (httpc.state != HTTPC_INIT) {
+		LOG_ERR("Another request is not finished.");
 		return err;
 	}
 
@@ -718,6 +760,7 @@ static void httpc_thread_fn(void *arg1, void *arg2, void *arg3)
 int slm_at_httpc_init(void)
 {
 	httpc.fd = INVALID_SOCKET;
+	httpc.state = HTTPC_INIT;
 
 	return 0;
 }
