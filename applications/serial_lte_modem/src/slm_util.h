@@ -23,7 +23,7 @@
 #define INVALID_ROLE	-1
 
 #define TCPIP_MAX_URL	128
-
+#define TCPIP_MAX_HOST_NAME_LEN 255
 /**
  * @brief Compare string ignoring case
  *
