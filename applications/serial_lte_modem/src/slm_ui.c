@@ -25,7 +25,7 @@ static void work_handler(struct k_work *work)
 		&leds[led->id].effect->steps[leds[led->id].effect_step];
 	//int substeps_left = effect_step->substep_count - leds[led->id].effect_substep;
 
-	LOG_DBG("LED %d state %d", led_map[led->id], effect_step->led_on);
+	//LOG_DBG("LED %d state %d", led_map[led->id], effect_step->led_on);
 	dk_set_led(led_map[led->id], effect_step->led_on);
 
 	leds[led->id].effect_substep++;
