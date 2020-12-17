@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
+#define CONFIG_SLM_UDP_PROXY 1
+
 #include <zephyr.h>
 #include <stdio.h>
 #include <ctype.h>
