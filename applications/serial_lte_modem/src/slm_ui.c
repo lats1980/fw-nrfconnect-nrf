@@ -8,11 +8,13 @@
 #include <logging/log.h>
 
 #include "slm_ui.h"
+#include <drivers/gpio.h>
 #include <modem/lte_lc.h>
 #include <modem/modem_info.h>
 #if defined(CONFIG_SLM_DIAG)
 #include "slm_diag.h"
 #endif
+const struct device *ui_gpio_dev;
 
 LOG_MODULE_REGISTER(ui, CONFIG_SLM_LOG_LEVEL);
 
@@ -206,6 +208,18 @@ int slm_ui_init(void)
 	k_delayed_work_init(&leds[LED_ID_DATA].work, work_handler);
 	leds[LED_ID_SIGNAL].id = LED_ID_SIGNAL;
 	k_delayed_work_init(&leds[LED_ID_SIGNAL].work, work_handler);
+
+	ui_gpio_dev = device_get_binding(DT_LABEL(DT_NODELABEL(gpio0)));
+	if (ui_gpio_dev == NULL) {
+		LOG_ERR("GPIO_0 for UI bind error");
+		err = -EINVAL;
+	}
+	err = gpio_pin_configure(ui_gpio_dev, CONFIG_SLM_RI_PIN,
+				GPIO_OUTPUT);
+	if (err) {
+		LOG_ERR("CONFIG_SLM_RI_PIN config error: %d", err);
+		return err;
+	}
 
 	return err;
 }

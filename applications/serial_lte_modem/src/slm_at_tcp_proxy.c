@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <net/socket.h>
+#include <drivers/gpio.h>
 #include <modem/modem_info.h>
 #include <sys/ring_buffer.h>
 #include "slm_util.h"
@@ -108,6 +109,8 @@ void rsp_send(const uint8_t *str, size_t len);
 extern struct at_param_list at_param_list;
 extern struct modem_param_info modem_param;
 extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
+
+extern const struct device *ui_gpio_dev;
 
 /** forward declaration of thread function **/
 static void tcpcli_thread_func(void *p1, void *p2, void *p3);
@@ -545,15 +548,25 @@ static void tcp_data_handle(uint8_t *data, uint32_t length)
 
 int tcpsvr_input(int infd)
 {
-	int ret;
+	int ret, err;
 
 	if (fds[infd].fd == proxy.sock) {
 		socklen_t len;
 		char peer_addr[INET_ADDRSTRLEN];
 
+		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 1);
+		if (err) {
+			LOG_ERR("Cannot write RI gpio high");
+			return err;
+		}
 		len = sizeof(struct sockaddr_in);
 		ret = accept(proxy.sock,
 				(struct sockaddr *)&remote, &len);
+		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 0);
+		if (err) {
+			LOG_ERR("Cannot write RI gpio low");
+			return err;
+		}
 		if (ret < 0) {
 			LOG_ERR("accept() failed: %d", -errno);
 			return -errno;
