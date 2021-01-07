@@ -415,7 +415,7 @@ TCP client
          :class: highlight
 
          **AT#XSOCKET=0**
-         #XSOCKET: 0, closed
+         #XSOCKET: 0, "closed"
          OK
 
          **AT#XSOCKET?**
@@ -490,7 +490,7 @@ TCP client
          :class: highlight
 
          **AT#XSOCKET=0**
-         #XSOCKET: 0, closed
+         #XSOCKET: 0, "closed"
          OK
 
 #. Test a TCP client with TCP proxy service (note that these commands are available only if :option:`CONFIG_SLM_TCP_PROXY` is defined):
@@ -512,7 +512,7 @@ TCP client
          :class: highlight
 
          **AT#XTCPCLI=1,"**\ *example.com*\ **",**\ *1234*
-         #XTCPCLI: 2 connected
+         #XTCPCLI: 2, "connected"
          OK
 
          **AT#XTCPCLI?**
@@ -571,7 +571,7 @@ TCP client
          :class: highlight
 
          **AT#XTCPCLI=2,"**\ *example.com*\ **",**\ *1234*
-         #XTCPCLI: 1 connected
+         #XTCPCLI: 1, "connected"
          OK
 
          **AT#XTCPCLI?**
@@ -592,7 +592,7 @@ TCP client
          :class: highlight
 
          **AT#XTCPCLI=0**
-         #XTCPCLI: disconnected
+         #XTCPCLI: "disconnected"
          OK
 
 UDP client
@@ -648,7 +648,7 @@ UDP client
          :class: highlight
 
          **AT#XSOCKET=0**
-         #XSOCKET: 0, closed
+         #XSOCKET: 0, "closed"
          OK
 
 #. Test a UDP client with connection-based UDP:
@@ -687,7 +687,7 @@ UDP client
          :class: highlight
 
          **AT#XSOCKET=0**
-         #XSOCKET: 0, closed
+         #XSOCKET: 0, "closed"
          OK
 
 #. Test a connection-based UDP client with UDP proxy service (note that these commands are available only if :option:`CONFIG_SLM_UDP_PROXY` is defined):
@@ -708,7 +708,7 @@ UDP client
          :class: highlight
 
          **AT#XUDPCLI=1,"**\ *example.com*\ **",**\ *1234*
-         #XUDPCLI: 2 connected
+         #XUDPCLI: 2, "connected"
          OK
 
    #. Send plain text data to the UDP server and check the returned data.
@@ -751,7 +751,7 @@ UDP client
          :class: highlight
 
          **AT#XUDPCLI=2,"**\ *example.com*\ **",**\ *1234*
-         #XUDPCLI: 1 connected
+         #XUDPCLI: 1, "connected"
          OK
 
          **AT#XUDPCLI?**
@@ -772,7 +772,7 @@ UDP client
          :class: highlight
 
          **AT#XUDPCLI=0**
-         #XUDPCLI: disconnected
+         #XUDPCLI: "disconnected"
          OK
 
 
@@ -834,7 +834,7 @@ You must register the corresponding credentials on the server side.
          :class: highlight
 
          **AT#XSOCKET=0**
-         #XSOCKET: 0, closed
+         #XSOCKET: 0, "closed"
          OK
 
 #. Test a TLS client with TCP proxy service (note that these commands are available only if :option:`CONFIG_SLM_TCP_PROXY` is defined):
@@ -847,7 +847,7 @@ You must register the corresponding credentials on the server side.
          :class: highlight
 
          **AT#XTCPCLI=1,"**\ *example.com*\ **",**\ *1234*
-         #XTCPCLI: 2 connected
+         #XTCPCLI: 2, "connected"
          OK
 
          **AT#XTCPCLI?**
@@ -875,7 +875,7 @@ You must register the corresponding credentials on the server side.
          :class: highlight
 
          **AT#XTCPCLI=0**
-         #XTCPCLI: disconnected
+         #XTCPCLI: "disconnected"
          OK
 
 .. not tested
@@ -944,7 +944,7 @@ You must register the corresponding credentials on the server side.
 	     :class: highlight
 
 	     **AT#XSOCKET=0**
-	     #XSOCKET: 0, closed
+	     #XSOCKET: 0, "closed"
 	     OK
 
     #. Test a DTLS client with UDP proxy service (note that these commands are available only if :option:`CONFIG_SLM_UDP_PROXY` is defined):
@@ -957,7 +957,7 @@ You must register the corresponding credentials on the server side.
 	     :class: highlight
 
 	     **AT#XUDPCLI=1,"**\ *example.com*\ **",**\ *1234*\ **,16842756**
-	     #XUDPCLI: 2 connected
+	     #XUDPCLI: 2, "connected"
 	     OK
 
        #. Disconnect from the server.
@@ -1086,7 +1086,7 @@ To act as a TCP server, |global_private_address|
          :class: highlight
 
          **AT#XSOCKET=0**
-         #XSOCKET: closed
+         #XSOCKET: "closed"
          OK
 
 
@@ -1186,7 +1186,7 @@ To act as a TCP server, |global_private_address|
          **AT#XTCPSVR?**
          #XTCPSVR: 1, 2, 0
          OK
-         #XTCPSVR: timeout
+         #XTCPSVR: "timeout"
 
          **AT#XTCPSVR?**
          #XTCPSVR: 1, -1, 0
@@ -1198,7 +1198,7 @@ To act as a TCP server, |global_private_address|
          :class: highlight
 
          **AT#XTCPSVR=0**
-         #XTCPSVR: stopped
+         #XTCPSVR: "stopped"
          OK
 
          **AT#XTCPSVR?**
@@ -1214,7 +1214,7 @@ To act as a TCP server, |global_private_address|
          :class: highlight
 
          **AT#XTCPSVR=2,**\ *1234*
-         #XTCPSVR: 1 started
+         #XTCPSVR: 1, "started"
          OK
 
          **AT#XTCPSVR?**
@@ -1252,7 +1252,7 @@ To act as a TCP server, |global_private_address|
          :class: highlight
 
          **AT#XTCPSVR=0**
-         #XTCPSVR: stopped
+         #XTCPSVR: "stopped"
          OK
 
 UDP server
@@ -1389,7 +1389,7 @@ To act as a UDP server, |global_private_address|
          :class: highlight
 
          **AT#XSOCKET=0**
-         #XSOCKET: 0, closed
+         #XSOCKET: 0, "closed"
          OK
 
 #. Test the UDP server with UDP proxy service (note that these commands are available only if :option:`CONFIG_SLM_UDP_PROXY` is defined):
@@ -1405,7 +1405,7 @@ To act as a UDP server, |global_private_address|
          OK
 
          **AT#XUDPSVR=1,**\ *1234*
-         #XUDPSVR: 2 started
+         #XUDPSVR: 2, "started"
          OK
 
    #. Run the :file:`client_udp.py` script to start sending data to the server.
@@ -1456,7 +1456,7 @@ To act as a UDP server, |global_private_address|
          :class: highlight
 
          **AT#XUDPSVR=0**
-         #XUDPSVR: stopped
+         #XUDPSVR: "stopped"
          OK
 
 #. Test the UDP server with UDP proxy service in data mode (note that these commands are available only if :option:`CONFIG_SLM_UDP_PROXY` is defined):
@@ -1468,7 +1468,7 @@ To act as a UDP server, |global_private_address|
          :class: highlight
 
          **AT#XUDPSVR=2,**\ *1234*
-         #XUDPSVR: 1 started
+         #XUDPSVR: 1, "started"
          OK
 
          **AT#XUDPSVR?**
@@ -1507,7 +1507,7 @@ To act as a UDP server, |global_private_address|
          :class: highlight
 
          **AT#XUDPSVR=0**
-         #XUDPSVR: stopped
+         #XUDPSVR: "stopped"
          OK
 
 TLS server
@@ -1519,11 +1519,11 @@ The TLS server role is currently not supported.
    :class: highlight
 
    **AT#XSOCKET=1,1,1,16842753**
-   #XSOCKET: (D)TLS Server not supported
+   #XSOCKET: "(D)TLS Server not supported"
    ERROR
 
    **AT#XTCPSVR=1,3443,16842753**
-   #XTCPSVR: TLS Server not supported
+   #XTCPSVR: "TLS Server not supported"
    ERROR
 
 DTLS server
@@ -1535,7 +1535,7 @@ The DTLS server role is currently not supported (modem limitation).
    :class: highlight
 
    **AT#XSOCKET=1,2,1,16842755**
-   #XSOCKET: (D)TLS Server not supported
+   #XSOCKET: "(D)TLS Server not supported"
    ERROR
 
 DNS lookup
@@ -1594,19 +1594,19 @@ After opening a client-role socket, you can configure various options.
       ERROR  // to be investigated
 
       **AT#XSOCKETOPT=0,2**
-      #XSOCKETOPT: ignored
+      #XSOCKETOPT: "ignored"
       OK
 
       **AT#XSOCKETOPT=1,2,1**
-      #XSOCKETOPT: ignored
+      #XSOCKETOPT: "ignored"
       OK
 
       **AT#XSOCKETOPT=0,61**
-      #XSOCKETOPT: not supported
+      #XSOCKETOPT: "not supported"
       OK
 
       **AT#XSOCKETOPT=1,61,30**
-      #XSOCKETOPT: not supported
+      #XSOCKETOPT: "not supported"
       OK
 
 Testing ICMP AT commands
