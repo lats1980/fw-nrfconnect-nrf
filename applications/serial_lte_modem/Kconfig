@@ -94,6 +94,17 @@ config SLM_RI_PIN
 	default 20
 
 #
+# Socket
+#
+config SLM_SOCKET_RX_MAX
+	int "Maximum RX buffer size for socket data receive"
+	range 576 708
+	default 576
+	help
+	  Default: NET_IPV4_MTU (576)
+	  Maximum: MSS setting in modem (708)
+
+#
 # TCP/TLS proxy
 #
 config SLM_WHITELIST_SIZE
