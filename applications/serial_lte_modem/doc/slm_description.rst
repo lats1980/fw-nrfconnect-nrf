@@ -157,6 +157,21 @@ Check and configure the following configuration options for the sample:
 
    This option configures the application to accept AT commands ending with carriage return and line feed.
 
+.. option:: CONFIG_SLM_DATAMODE_HWFC - UART HWFC for data mode
+
+   This option specifies requiring UART hardware flow control for data mode or not.
+   By default, UART hardware flow control is required.
+
+.. option:: CONFIG_SLM_DATAMODE_TERMINATOR - Pattern string to terminate data mode
+
+   This option specifies a pattern string to terminate data mode.
+   Default pattern string is "+++".
+
+.. option:: CONFIG_SLM_DATAMODE_SILENCE - Silence time to exit data mode
+
+   This option specifies the time (in seconds) of UART silence before and after the pattern
+   string used to exit data mode. Default value is 1s.
+
 .. option:: CONFIG_SLM_SUPL_SERVER - SUPL server
 
    This option specifies the SUPL server to use for retrieving SUPL A-GPS data.
@@ -302,7 +317,7 @@ Complete the following steps to test the functionality provided by the :ref:`SLM
       :class: highlight
 
       **AT#XSLMUART?**
-      #SLMUART: 115200
+      #XSLMUART: 115200
       OK
 
    You can change the used baud rate with the corresponding set command, but note that LTE Link Monitor requires 115200 bps for communication.

@@ -104,6 +104,7 @@ RING_BUF_DECLARE(data_buf, CONFIG_SLM_SOCKET_RX_MAX * 2);
 static char ip_whitelist[CONFIG_SLM_WHITELIST_SIZE][INET_ADDRSTRLEN];
 static int whitelist_action;
 static struct k_thread tcp_thread;
+static struct k_work disconnect_work;
 static K_THREAD_STACK_DEFINE(tcp_thread_stack, THREAD_STACK_SIZE);
 K_TIMER_DEFINE(conn_timer, NULL, NULL);
 
@@ -124,6 +125,9 @@ static int nfds;
 
 /* global functions defined in different files */
 void rsp_send(const uint8_t *str, size_t len);
+void enter_datamode(void);
+bool exit_datamode(void);
+bool check_uart_flowcontrol(void);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
@@ -466,7 +470,6 @@ static int do_tcp_send(const uint8_t *data, int datalen)
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		/* restart activity timer */
 		if (proxy.role == AT_TCP_ROLE_SERVER) {
-			LOG_DBG("do_tcp_send: Restart timer:%d", proxy.timeout);
 			k_timer_start(&conn_timer, K_SECONDS(proxy.timeout),
 				      K_NO_WAIT);
 		}
@@ -566,7 +569,26 @@ static void tcp_data_handle(uint8_t *data, uint32_t length)
 
 }
 
-int tcpsvr_input(int infd)
+static void tcp_terminate_connection(void)
+{
+	k_timer_stop(&conn_timer);
+
+	if (proxy.datamode) {
+		(void)exit_datamode();
+	}
+	close(proxy.sock_peer);
+	proxy.sock_peer = INVALID_SOCKET;
+	nfds--;
+}
+
+static void terminate_connection_wk(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	tcp_terminate_connection();
+}
+
+static int tcpsvr_input(int infd)
 {
 	int ret, err;
 
@@ -626,6 +648,9 @@ int tcpsvr_input(int infd)
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
 		proxy.sock_peer = ret;
+		if (proxy.datamode) {
+			enter_datamode();
+		}
 		LOG_DBG("New connection - %d",
 			proxy.sock_peer);
 		fds[nfds].fd = proxy.sock_peer;
@@ -661,6 +686,7 @@ recv_done:
 static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 {
 	int ret, current_size;
+	bool in_datamode;
 
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
@@ -674,13 +700,11 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 		if (proxy.timeout > 0 &&
 			k_timer_status_get(&conn_timer) > 0) {
 			k_timer_stop(&conn_timer);
-			LOG_INF("Connecion timeout");
+			LOG_WRN("Connecion timeout");
 			sprintf(rsp_buf, "#XTCPSVR: %d, \"timeout\"\r\n",
 				-ETIME);
 			rsp_send(rsp_buf, strlen(rsp_buf));
-			close(proxy.sock_peer);
-			proxy.sock_peer = INVALID_SOCKET;
-			nfds--;
+			tcp_terminate_connection();
 		}
 		ret = poll(fds, nfds, MSEC_PER_SEC * CONFIG_SLM_TCP_POLL_TIME);
 		if (ret < 0) {  /* IO error */
@@ -705,10 +729,7 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 					"#XTCPSVR: %d, \"disconnected\"\r\n",
 					-EIO);
 				rsp_send(rsp_buf, strlen(rsp_buf));
-				k_timer_stop(&conn_timer);
-				close(proxy.sock_peer);
-				proxy.sock_peer = INVALID_SOCKET;
-				nfds--;
+				tcp_terminate_connection();
 				continue;
 			}
 			if ((fds[i].revents & POLLHUP) == POLLHUP) {
@@ -721,10 +742,7 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 					"#XTCPSVR: %d, \"disconnected\"\r\n",
 					-ECONNRESET);
 				rsp_send(rsp_buf, strlen(rsp_buf));
-				k_timer_stop(&conn_timer);
-				close(proxy.sock_peer);
-				proxy.sock_peer = INVALID_SOCKET;
-				nfds--;
+				tcp_terminate_connection();
 				continue;
 			}
 			if ((fds[i].revents & POLLNVAL) == POLLNVAL) {
@@ -737,10 +755,7 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 					"#XTCPSVR: %d, \"disconnected\"\r\n",
 					-ECONNABORTED);
 				rsp_send(rsp_buf, strlen(rsp_buf));
-				k_timer_stop(&conn_timer);
-				/* Socket was closed before */
-				proxy.sock_peer = INVALID_SOCKET;
-				nfds--;
+				tcp_terminate_connection();
 				continue;
 			}
 			if ((fds[i].revents & POLLIN) == POLLIN) {
@@ -773,15 +788,23 @@ exit:
 		}
 	}
 #endif
+	in_datamode = proxy.datamode;
 	slm_at_tcp_proxy_init();
 	sprintf(rsp_buf, "#XTCPSVR: %d, \"stopped\"\r\n", ret);
 	rsp_send(rsp_buf, strlen(rsp_buf));
+	if (in_datamode) {
+		if (exit_datamode()) {
+			sprintf(rsp_buf, "#XTCPSVR: 0, \"datamode\"\r\n");
+			rsp_send(rsp_buf, strlen(rsp_buf));
+		}
+	}
 }
 
 /* TCP client thread */
 static void tcpcli_thread_func(void *p1, void *p2, void *p3)
 {
 	int ret;
+	bool in_datamode;
 
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
@@ -834,6 +857,7 @@ exit:
 			LOG_WRN("close(%d) fail: %d", proxy.sock, -errno);
 		}
 	}
+	in_datamode = proxy.datamode;
 #if defined(CONFIG_SLM_NATIVE_TLS)
 	if (proxy.sec_tag != INVALID_SEC_TAG) {
 		ret = slm_tls_unloadcrdl(proxy.sec_tag);
@@ -845,6 +869,12 @@ exit:
 	slm_at_tcp_proxy_init();
 	sprintf(rsp_buf, "#XTCPCLI: %d, \"disconnected\"\r\n", ret);
 	rsp_send(rsp_buf, strlen(rsp_buf));
+	if (in_datamode) {
+		if (exit_datamode()) {
+			sprintf(rsp_buf, "#XTCPCLI: 0, \"datamode\"\r\n");
+			rsp_send(rsp_buf, strlen(rsp_buf));
+		}
+	}
 }
 
 /**@brief handle AT#XTCPWHITELIST commands
@@ -975,6 +1005,12 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 				at_params_int_get(&at_param_list, 4,
 						  &proxy.sec_tag);
 			}
+#if defined(CONFIG_SLM_DATAMODE_HWFC)
+			if (op == AT_SERVER_START_WITH_DATAMODE &&
+			    !check_uart_flowcontrol()) {
+				return -EINVAL;
+			}
+#endif
 			err = do_tcp_server_start(port);
 			if (err == 0 && op == AT_SERVER_START_WITH_DATAMODE) {
 				proxy.datamode = true;
@@ -1149,23 +1185,25 @@ static int handle_at_tcp_client(enum at_cmd_type cmd_type)
 				}
 				hostname[hn_size] = '\0';
 			}
+#if defined(CONFIG_SLM_DATAMODE_HWFC)
+			if (op == AT_CLIENT_CONNECT_WITH_DATAMODE &&
+			    !check_uart_flowcontrol()) {
+				return -EINVAL;
+			}
+#endif
 			err = do_tcp_client_connect(url, hostname, port);
 			if (err == 0 &&
 			    op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
 				proxy.datamode = true;
+				enter_datamode();
 			}
 		} else if (op == AT_CLIENT_DISCONNECT) {
 			err = do_tcp_client_disconnect();
 		} break;
 
 	case AT_CMD_TYPE_READ_COMMAND:
-		if (proxy.sock != INVALID_SOCKET &&
-		    proxy.role == AT_TCP_ROLE_CLIENT) {
-			sprintf(rsp_buf, "#XTCPCLI: %d, %d\r\n",
-				proxy.sock, proxy.datamode);
-		} else {
-			sprintf(rsp_buf, "#XTCPCLI: %d\r\n", INVALID_SOCKET);
-		}
+		sprintf(rsp_buf, "#XTCPCLI: %d, %d\r\n",
+			proxy.sock, proxy.datamode);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
 		break;
@@ -1271,7 +1309,7 @@ static int handle_at_tcp_recv(enum at_cmd_type cmd_type)
 
 /**@brief API to handle TCP proxy AT commands
  */
-int slm_at_tcp_proxy_parse(const char *at_cmd, uint16_t length)
+int slm_at_tcp_proxy_parse(const char *at_cmd)
 {
 	int ret = -ENOENT;
 	enum at_cmd_type type;
@@ -1288,22 +1326,6 @@ int slm_at_tcp_proxy_parse(const char *at_cmd, uint16_t length)
 			type = at_parser_cmd_type_get(at_cmd);
 			ret = tcp_proxy_at_list[i].handler(type);
 			break;
-		}
-	}
-
-	/* handle sending in data mode */
-	if (ret == -ENOENT && proxy.datamode) {
-		ret = do_tcp_send_datamode(at_cmd, length);
-		if (ret > 0) {
-#if defined(CONFIG_SLM_UI)
-			if (ret < NET_IPV4_MTU/3) {
-				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-			} else if (ret < 2*NET_IPV4_MTU/3) {
-				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
-			} else {
-				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
-			}
-#endif
 		}
 	}
 
@@ -1340,6 +1362,7 @@ int slm_at_tcp_proxy_init(void)
 		memset(ip_whitelist[i], 0x00, INET_ADDRSTRLEN);
 	}
 	whitelist_action = AT_TCP_ACTION_NONE;
+	k_work_init(&disconnect_work, terminate_connection_wk);
 
 	return 0;
 }
@@ -1356,4 +1379,47 @@ int slm_at_tcp_proxy_uninit(void)
 	}
 
 	return 0;
+}
+
+/**@brief API to get datamode from external
+ */
+bool slm_tcp_get_datamode(void)
+{
+	return proxy.datamode;
+}
+
+/**@brief API to set datamode off from external
+ */
+void slm_tcp_set_datamode_off(void)
+{
+	if (proxy.role == AT_TCP_ROLE_CLIENT &&
+	    proxy.sock != INVALID_SOCKET) {
+		proxy.datamode = false;
+	}
+	if (proxy.role == AT_TCP_ROLE_SERVER &&
+	    proxy.sock_peer != INVALID_SOCKET) {
+		k_work_submit(&disconnect_work);
+	}
+}
+
+/**@brief API to send TCP data in datamode
+ */
+int slm_tcp_send_datamode(const uint8_t *data, int len)
+{
+	int size = do_tcp_send_datamode(data, len);
+
+#if defined(CONFIG_SLM_UI)
+	if (size > 0) {
+		if (size < NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (size < 2*NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
+	}
+#endif
+
+	LOG_DBG("datamode %d sent", size);
+	return size;
 }

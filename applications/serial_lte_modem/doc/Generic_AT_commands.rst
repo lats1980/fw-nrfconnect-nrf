@@ -272,7 +272,7 @@ Example
 ::
 
    AT#XSLMUART?
-   #SLMUART: 115200
+   #XSLMUART: 115200
    OK
 
 Test command
@@ -301,3 +301,94 @@ Example
 
    AT#XSLMUART=?
    #XSLMUART: (1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 1000000)
+
+SLM DATA MODE CONTROL #XDATACTL
+===============================
+
+The ``#XDATACTRL`` command configure size or time limit for data mode.
+
+Set command
+-----------
+
+The set command configures size or time limit for data mode.
+
+Syntax
+~~~~~~
+
+::
+
+   #XDATACTRL=<size_limit>,<time_limit>
+
+The ``<size_limit>`` parameter is an integer.
+It is the size limit in data mode and accepts an value less than 1024.
+The ``<time_limit>`` parameter is an integer.
+It is the time limit (in milliseconds) in data mode and accepts an value less than 10000.
+By default neither size limit nor time limit is defined for data mode.
+
+Response syntax
+~~~~~~~~~~~~~~~
+
+There is no response.
+
+Example
+~~~~~~~
+
+::
+
+   AT#XDATACTRL=1024,5000
+   OK
+
+Read command
+------------
+
+The read command shows the current size and time configurations for data mode.
+
+Syntax
+~~~~~~
+
+::
+
+   AT#XDATACTRL?
+
+Response syntax
+~~~~~~~~~~~~~~~
+
+::
+
+   #XDATACTRL: <size_limit>, <time_limit>
+
+Example
+~~~~~~~
+
+::
+
+   AT#XDATACTRL?
+   #XDATACTRL: 1024, 5000
+   OK
+
+Test command
+------------
+
+The test command tests the existence of the AT command and provides information about the type of its subparameters.
+
+Syntax
+~~~~~~
+
+::
+
+   #XDATACTRL=?
+
+Response syntax
+~~~~~~~~~~~~~~~
+
+::
+
+   #XDATACTRL: "<size_limit>, <time_limit>"
+
+Example
+~~~~~~~
+
+::
+
+   AT#XDATACTRL=?
+   #XDATACTL: <size_limit>, <time_limit>

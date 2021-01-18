@@ -97,7 +97,7 @@ config SLM_RI_PIN
 # Socket
 #
 config SLM_SOCKET_RX_MAX
-	int "Maximum RX buffer size for socket data receive"
+	int "Maximum RX buffer size for receiving socket data"
 	range 576 708
 	default 576
 	help
@@ -123,6 +123,24 @@ config SLM_UDP_POLL_TIME
 config SLM_TCP_CONN_TIME
 	int "Connection time-out in seconds for TCP server"
 	default 60
+
+config SLM_DATAMODE_HWFC
+	bool "UART HWFC for data mode"
+	default y
+	help
+	  Require UART hardware flow control for data mode or not
+
+config SLM_DATAMODE_TERMINATOR
+	string "Pattern string to terminate data mode"
+	default "+++"
+	help
+	  Use a pattern string to terminate data mode
+
+config SLM_DATAMODE_SILENCE
+	int "Silence time to exit data mode"
+	default 1
+	help
+	  Exit data mode after the specified time (in seconds) of UART silence
 
 #
 # Configurable services
