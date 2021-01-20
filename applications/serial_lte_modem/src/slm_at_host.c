@@ -118,6 +118,7 @@ static K_SEM_DEFINE(tx_done, 0, 1);
 /* global functions defined in different files */
 void enter_idle(void);
 void enter_sleep(bool wake_up);
+void wakeup_uart(void);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
@@ -129,8 +130,19 @@ void slm_at_host_uninit(void);
 void rsp_send(const uint8_t *str, size_t len)
 {
 	int ret;
+	uint32_t current_state;
 
 	if (len == 0) {
+		return;
+	}
+
+	ret = device_get_power_state(uart_dev, &current_state);
+	if (ret) {
+		LOG_ERR("device_get_power_state: %d", ret);
+		return;
+	}
+
+	if (current_state != DEVICE_PM_ACTIVE_STATE) {
 		return;
 	}
 
@@ -183,6 +195,32 @@ bool exit_datamode(void)
 	}
 
 	return false;
+}
+
+void wakeup_uart(void)
+{
+	int err;
+	uint32_t current_state;
+
+	/* Ensure UART module is active */
+	err = device_get_power_state(uart_dev, &current_state);
+	if (err) {
+		LOG_ERR("device_get_power_state: %d", err);
+		return;
+	}
+
+	if (current_state != DEVICE_PM_ACTIVE_STATE) {
+		device_set_power_state(uart_dev, DEVICE_PM_ACTIVE_STATE,
+					NULL, NULL);
+		k_sleep(K_MSEC(100));
+		err = uart_rx_enable(uart_dev, uart_rx_buf[0],
+				     sizeof(uart_rx_buf[0]),
+				     UART_RX_TIMEOUT);
+		if (err) {
+			LOG_ERR("Cannot enable rx: %d", err);
+			return;
+		}
+	}
 }
 
 bool check_uart_flowcontrol(void)
@@ -353,6 +391,18 @@ static int handle_at_slmuart(const char *at_cmd, uint32_t *baudrate)
 			}
 		}
 		switch (*baudrate) {
+		case 0:
+			LOG_INF("Disable UART");
+			/* Power off UART module */
+			uart_rx_disable(uart_dev);
+			k_sleep(K_MSEC(100));
+			ret = device_set_power_state(uart_dev,
+						     DEVICE_PM_OFF_STATE,
+						     NULL, NULL);
+			if (ret) {
+				LOG_WRN("Can't power off uart: %d", ret);
+			}
+			break;
 		case 1200:
 		case 2400:
 		case 4800:
@@ -603,9 +653,11 @@ static void cmd_send(struct k_work *work)
 			rsp_send(ERROR_STR, sizeof(ERROR_STR) - 1);
 			goto done;
 		} else {
-			rsp_send(OK_STR, sizeof(OK_STR) - 1);
-			k_sleep(K_MSEC(50));
-			set_uart_baudrate(baudrate);
+			if (baudrate != 0) {
+				rsp_send(OK_STR, sizeof(OK_STR) - 1);
+				k_sleep(K_MSEC(50));
+				set_uart_baudrate(baudrate);
+			}
 			goto done;
 		}
 	}

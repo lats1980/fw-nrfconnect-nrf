@@ -127,6 +127,7 @@ static int nfds;
 void rsp_send(const uint8_t *str, size_t len);
 void enter_datamode(void);
 bool exit_datamode(void);
+void wakeup_uart(void);
 bool check_uart_flowcontrol(void);
 
 /* global variable defined in different files */
@@ -641,15 +642,17 @@ static int tcpsvr_input(int infd)
 		}
 		/* Accept incoming connection */
 		LOG_DBG("accept(): %d", ret);
+		proxy.sock_peer = ret;
+		if (proxy.datamode) {
+			enter_datamode();
+		}
+		/* Ensure UART is powered on */
+		wakeup_uart();
 		if (inet_ntop(AF_INET, &remote.sin_addr, peer_addr,
 			INET_ADDRSTRLEN) != NULL) {
 			sprintf(rsp_buf, "#XTCPSVR: \"%s\", \"connected\"\r\n",
 				peer_addr);
 			rsp_send(rsp_buf, strlen(rsp_buf));
-		}
-		proxy.sock_peer = ret;
-		if (proxy.datamode) {
-			enter_datamode();
 		}
 		LOG_DBG("New connection - %d",
 			proxy.sock_peer);
