@@ -93,6 +93,10 @@ config SLM_RI_PIN
 	int "Ring Indicator Pin"
 	default 20
 
+config SLM_RI_DURATION
+	int "Duration the Ring Indicator Pin to be toggled in ms"
+	default 500
+
 #
 # Socket
 #

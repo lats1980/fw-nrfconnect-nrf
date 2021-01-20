@@ -597,9 +597,16 @@ static int tcpsvr_input(int infd)
 		socklen_t len;
 		char peer_addr[INET_ADDRSTRLEN];
 
+		/* Toggle RI pins for pre-defined duration */
 		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 1);
 		if (err) {
 			LOG_ERR("Cannot write RI gpio high");
+			return err;
+		}
+		k_sleep(K_MSEC(CONFIG_SLM_RI_DURATION));
+		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 0);
+		if (err) {
+			LOG_ERR("Cannot write RI gpio low");
 			return err;
 		}
 		len = sizeof(struct sockaddr_in);
@@ -626,11 +633,6 @@ static int tcpsvr_input(int infd)
 		}
 		ret = accept(proxy.sock,
 				(struct sockaddr *)&remote, &len);
-		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 0);
-		if (err) {
-			LOG_ERR("Cannot write RI gpio low");
-			return err;
-		}
 		if (ret < 0) {
 			LOG_ERR("accept() failed: %d", -errno);
 			return -errno;
