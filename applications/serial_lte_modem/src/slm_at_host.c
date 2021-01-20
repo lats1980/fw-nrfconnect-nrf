@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#define CONFIG_SLM_UDP_PROXY 1
-
 #include <zephyr.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -22,9 +20,7 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #include "slm_util.h"
 #include "slm_at_host.h"
 #include "slm_at_tcp_proxy.h"
-#if defined(CONFIG_SLM_UDP_PROXY)
 #include "slm_at_udp_proxy.h"
-#endif
 #include "slm_at_tcpip.h"
 #if defined(CONFIG_SLM_NATIVE_TLS)
 #include "slm_at_cmng.h"
@@ -298,9 +294,7 @@ static void handle_at_clac(void)
 	rsp_send(AT_CMD_DATACTRL, sizeof(AT_CMD_DATACTRL) - 1);
 	rsp_send("\r\n", 2);
 	slm_at_tcp_proxy_clac();
-#if defined(CONFIG_SLM_UDP_PROXY)
 	slm_at_udp_proxy_clac();
-#endif
 	slm_at_tcpip_clac();
 #if defined(CONFIG_SLM_NATIVE_TLS)
 	slm_at_cmng_clac();
@@ -714,7 +708,6 @@ static void cmd_send(struct k_work *work)
 		rsp_send(ERROR_STR, sizeof(ERROR_STR) - 1);
 		goto done;
 	}
-#if defined(CONFIG_SLM_UDP_PROXY)
 
 	err = slm_at_udp_proxy_parse(at_buf);
 	if (err == 0) {
@@ -724,7 +717,7 @@ static void cmd_send(struct k_work *work)
 		rsp_send(ERROR_STR, sizeof(ERROR_STR) - 1);
 		goto done;
 	}
-#endif
+
 	err = slm_at_tcpip_parse(at_buf);
 	if (err == 0) {
 		rsp_send(OK_STR, sizeof(OK_STR) - 1);
@@ -914,7 +907,7 @@ static int cmd_rx_handler(uint8_t character)
 		break;
 	}
 
-	return;
+	return 0;
 send:
 	uart_rx_disable(uart_dev);
 	k_work_submit(&cmd_send_work);
@@ -1041,13 +1034,13 @@ int slm_at_host_init(void)
 		LOG_ERR("TCP Server could not be initialized: %d", err);
 		return -EFAULT;
 	}
-#if defined(CONFIG_SLM_UDP_PROXY)
+
 	err = slm_at_udp_proxy_init();
 	if (err) {
 		LOG_ERR("UDP Server could not be initialized: %d", err);
 		return -EFAULT;
 	}
-#endif
+
 	err = slm_at_tcpip_init();
 	if (err) {
 		LOG_ERR("TCPIP could not be initialized: %d", err);
@@ -1137,12 +1130,12 @@ void slm_at_host_uninit(void)
 	if (err) {
 		LOG_WRN("TCP Server could not be uninitialized: %d", err);
 	}
-#if defined(CONFIG_SLM_UDP_PROXY)
+
 	err = slm_at_udp_proxy_uninit();
 	if (err) {
 		LOG_WRN("UDP Server could not be uninitialized: %d", err);
 	}
-#endif
+
 	err = slm_at_tcpip_uninit();
 	if (err) {
 		LOG_WRN("TCPIP could not be uninitialized: %d", err);
