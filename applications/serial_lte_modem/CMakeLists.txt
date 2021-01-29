@@ -17,6 +17,7 @@ target_sources(app PRIVATE src/slm_at_tcp_proxy.c)
 target_sources(app PRIVATE src/slm_at_udp_proxy.c)
 target_sources(app PRIVATE src/slm_at_icmp.c)
 target_sources(app PRIVATE src/slm_at_fota.c)
+target_sources_ifdef(CONFIG_SLM_INDICATOR app PRIVATE src/slm_at_indicator.c)
 target_sources_ifdef(CONFIG_SLM_NATIVE_TLS app PRIVATE src/slm_native_tls.c)
 target_sources_ifdef(CONFIG_SLM_NATIVE_TLS app PRIVATE src/slm_at_cmng.c)
 

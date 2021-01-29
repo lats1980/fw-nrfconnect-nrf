@@ -19,6 +19,10 @@ config SLM_AT_MAX_PARAM
 	int "Maximum number of parameters in AT command"
 	default 9
 
+config SLM_INDICATOR
+	bool "Use SLM Event Indicator"
+	default y
+
 config SLM_NATIVE_TLS
 	bool "Use Zephyr mbedTLS"
 
