@@ -39,6 +39,9 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #if defined(CONFIG_SLM_HTTPC)
 #include "slm_at_httpc.h"
 #endif
+#if defined(CONFIG_SLM_STATS)
+#include "slm_at_stats.h"
+#endif
 
 #define OK_STR		"\r\nOK\r\n"
 #define ERROR_STR	"\r\nERROR\r\n"
@@ -208,6 +211,9 @@ static void handle_at_clac(void)
 #endif
 #if defined(CONFIG_SLM_HTTPC)
 	slm_at_httpc_clac();
+#endif
+#if defined(CONFIG_SLM_STATS)
+	slm_at_stats_clac();
 #endif
 }
 
@@ -483,6 +489,17 @@ static void cmd_send(struct k_work *work)
 
 #if defined(CONFIG_SLM_HTTPC)
 	err = slm_at_httpc_parse(at_buf, at_buf_len);
+	if (err == 0) {
+		rsp_send(OK_STR, sizeof(OK_STR) - 1);
+		goto done;
+	} else if (err != -ENOENT) {
+		rsp_send(ERROR_STR, sizeof(ERROR_STR) - 1);
+		goto done;
+	}
+#endif
+
+#if defined(CONFIG_SLM_STATS)
+	err = slm_at_stats_parse(at_buf);
 	if (err == 0) {
 		rsp_send(OK_STR, sizeof(OK_STR) - 1);
 		goto done;
@@ -832,12 +849,19 @@ void slm_at_host_uninit(void)
 	if (err) {
 		LOG_WRN("HTTP could not be uninitialized: %d", err);
 	}
+#endif
 
+#if defined(CONFIG_SLM_STATS)
+	err = slm_at_stats_uninit();
+	if (err) {
+		LOG_WRN("SLM STATS could not be uninitialized: %d", err);
+	}
+#endif
 	err = at_notif_deregister_handler(NULL, response_handler);
 	if (err) {
 		LOG_WRN("Can't deregister handler: %d", err);
 	}
-#endif
+
 	/* Power off UART module */
 	uart_rx_disable(uart_dev);
 	k_sleep(K_MSEC(100));

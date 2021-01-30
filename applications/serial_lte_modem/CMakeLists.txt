@@ -25,5 +25,6 @@ add_subdirectory(src/gps)
 add_subdirectory(src/ftp_c)
 add_subdirectory(src/mqtt_c)
 add_subdirectory(src/http_c)
+add_subdirectory(src/stats)
 
 zephyr_include_directories(src)
