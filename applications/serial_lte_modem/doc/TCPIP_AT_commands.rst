@@ -95,7 +95,7 @@ Unsolicited notification
 
 ::
 
-   #XSOCKET: <error>, "closed"
+   #XSOCKET: <error>,"closed"
 
 The ``<error>`` value is a negative integer.
 It represents the error value according to the standard POSIX *errorno*.
@@ -106,19 +106,19 @@ Examples
 ::
 
    AT#XSOCKET=1,1,0
-   #XSOCKET: 3, 6, 0
+   #XSOCKET: 3,6,0
    OK
    AT#XSOCKET=1,2,0
-   #XSOCKET: 3, 17, 0
+   #XSOCKET: 3,17,0
    OK
    AT#XSOCKET=0
-   #XSOCKET: 0, closed
+   #XSOCKET: 0,"closed"
    OK
    at#xsocket=1,1,0,16842753
-   #XSOCKET: 2, 1, 0, 258
+   #XSOCKET: 2,1,0,258
    OK
    at#xsocket=1,2,0,16842753
-   #XSOCKET: 2, 2, 0, 273
+   #XSOCKET: 2,2,0,273
    OK
 
 Read command
@@ -165,25 +165,25 @@ Examples
 ::
 
    AT#XSOCKET?
-   #XSOCKET: 3, 6, 0
+   #XSOCKET: 3,6,0
    OK
 
 ::
 
    AT#XSOCKET?
-   #XSOCKET: 3, 17, 0
+   #XSOCKET: 3,17,0
    OK
 
 ::
 
    at#xsocket?
-   #XSOCKET: 2, 258, 0
+   #XSOCKET: 2,258,0
    OK
 
 ::
 
    at#xsocket?
-   #XSOCKET: 2, 273, 0
+   #XSOCKET: 2,273,0
    OK
 
 Test command
@@ -236,7 +236,7 @@ Examples
 ::
 
    at#xsocket=?
-   #XSOCKET: (0, 1), (1, 2),<sec_tag>
+   #XSOCKET: (0,1),(1,2),<sec_tag>
    OK
 
 BSD socket options #XSOCKETOPT
@@ -279,7 +279,7 @@ Unsolicited Notification
 
 ::
 
-   #XSOCKET: <error>, "closed"
+   #XSOCKET: <error>,"closed"
 
 ``SO_ERROR(4)``, the ``<error>`` response is the *Error Status*.
 
@@ -327,7 +327,7 @@ Examples
 ::
 
    at#xsocketopt=?
-   #XSOCKETOPT: (0, 1), <name>, <value>
+   #XSOCKETOPT: (0,1),<name>,<value>
    OK
 
 Socket binding #XBIND
@@ -418,7 +418,7 @@ Examples
 
 ::
 
-   AT#XCONNECT="192.168.0.1", 1234
+   AT#XCONNECT="192.168.0.1",1234
    #XCONNECT: 1
    OK
 
@@ -683,7 +683,7 @@ Examples
 
    AT#XRECV
    Test OK
-   #XRECV: 1, 7
+   #XRECV: 1,7
    OK
 
 Read command
@@ -788,7 +788,7 @@ Response syntax
 ::
 
    <data>
-   #XRECVFROM: <datatype>, <size>
+   #XRECVFROM: <datatype>,<size>
 
 
 * The ``<data>`` value is a string.
@@ -811,7 +811,7 @@ Examples
 
    AT#UDPRECVFROM="test.server.com",1234
    Test OK
-   #XRECVFROM: 1, 7
+   #XRECVFROM: 1,7
    OK
 
 Read command
@@ -908,7 +908,7 @@ Response syntax
 
 ::
 
-   #XTCPSVR: <handle>, "started"
+   #XTCPSVR: <handle>,"started"
 
 The ``<handle>`` value is an integer.
 When positive, it indicates that it opened successfully.
@@ -919,14 +919,14 @@ Unsolicited notification
 
 ::
 
-   #XTCPSVR: <error>, "stopped"
+   #XTCPSVR: <error>,"stopped"
 
 The ``<error>`` value is a negative integer.
 It represents the error value according to the standard POSIX *errorno*.
 
 ::
 
-   #XTCPDATA: <datatype>, <size>
+   #XTCPDATA: <datatype>,<size>
 
 * The ``<datatype>`` value can assume one of the following values:
 
@@ -944,12 +944,12 @@ Examples
 ::
 
    at#xtcpsvr=1,3442,600
-   #XTCPSVR: 2, "started"
+   #XTCPSVR: 2,"started"
    OK
-   #XTCPSVR: "5.123.123.99", "connected"
-   #XTCPRECV: 1, 13
+   #XTCPSVR: "5.123.123.99","connected"
+   #XTCPRECV: 1,13
    Hello, TCP#1!
-   #XTCPRECV: 1, 13
+   #XTCPRECV: 1,13
    Hello, TCP#2!
 
 Read command
@@ -986,11 +986,11 @@ Examples
 ::
 
    at#xtcpsvr?
-   #XTCPSVR: 1, 2, 0
+   #XTCPSVR: 1,2,0
    OK
    #XTCPSVR: "timeout"
    at#xtcpsvr?
-   #XTCPSVR: 1, -1
+   #XTCPSVR: 1,-1
    OK
 
 Test command
@@ -1018,7 +1018,7 @@ Examples
 ::
 
    at#xtcpsvr=?
-   #XTCPSVR: (0, 1, 2),<port>,<sec_tag>
+   #XTCPSVR: (0,1,2),<port>,<sec_tag>
    OK
 
 TCP/TLS client #XTCPCLI
@@ -1059,14 +1059,14 @@ Response syntax
 
 ::
 
-   #XTCPCLI: <handle>, "connected"
+   #XTCPCLI: <handle>,"connected"
 
 Unsolicited notification
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
-   #XTCPCLI: <error>, "disconnected"
+   #XTCPCLI: <error>,"disconnected"
 
 The ``<error>`` value is a negative integer.
 It represents the error value according to the standard POSIX *errorno*.
@@ -1076,7 +1076,7 @@ The modem needs to be in the offline state.
 
 ::
 
-   #XTCPDATA: <datatype>, <size>
+   #XTCPDATA: <datatype>,<size>
 
 * The ``<datatype>`` value can assume one of the following values:
 
@@ -1094,9 +1094,9 @@ Examples
 ::
 
    at#xtcpcli=1,"remote.ip",1234
-   #XTCPCLI: 2, "connected"
+   #XTCPCLI: 2,"connected"
    OK
-   #XTCPRECV: 1, 31
+   #XTCPRECV: 1,31
    PONG: b'Test TCP by IP address'
 
    at#xtcpcli=0
@@ -1148,7 +1148,7 @@ Examples
 ::
 
    at#xtcpcli=?
-   #XTCPCLI: (0, 1, 2),<url>,<port>,<sec_tag>
+   #XTCPCLI: (0,1,2),<url>,<port>,<sec_tag>
    OK
 
 TCP send data #XTCPSEND
@@ -1287,7 +1287,7 @@ Response syntax
 
 ::
 
-   #XUDPSVR: <handle>, "started"
+   #XUDPSVR: <handle>,"started"
 
 The ``<handle>`` value is an integer.
 When positive, it indicates that it opened successfully.
@@ -1298,7 +1298,7 @@ Unsolicited notification
 
 ::
 
-   #XUDPSVR: <error>, "stopped"
+   #XUDPSVR: <error>,"stopped"
 
 The ``<error>`` value is a negative integer.
 It represents the error value according to the standard POSIX *errorno*.
@@ -1308,7 +1308,7 @@ It is reported to the client as follows:
 
 ::
 
-   #XUDPRECV: <datatype>, <size>
+   #XUDPRECV: <datatype>,<size>
    <data>
 
 * The ``<datatype>`` parameter can accept one of the following values:
@@ -1326,11 +1326,11 @@ Examples
 ::
 
    at#xudpsvr=1,3442
-   #XUDPSVR: 2, "started"
+   #XUDPSVR: 2,"started"
    OK
-   #XUDPRECV: 1, 13
+   #XUDPRECV: 1,13
    Hello, UDP#1!
-   #XUDPRECV: 1, 13
+   #XUDPRECV: 1,13
    Hello, UDP#2!
 
 Read command
@@ -1386,7 +1386,7 @@ Examples
 ::
 
    at#xudpsvr=?
-   #XUDPSVR: (0, 1, 2),<port>,<sec_tag>
+   #XUDPSVR: (0,1,2),<port>,<sec_tag>
    OK
 
 UDP/DTLS client #XUDPCLI
@@ -1426,14 +1426,14 @@ Response syntax
 
 ::
 
-   #XUDPCLI: <handle>, "connected"
+   #XUDPCLI: <handle>,"connected"
 
 Unsolicited notification
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 ::
 
-   #XUDPCLI: <error>, "disconnected"
+   #XUDPCLI: <error>,"disconnected"
 
 The ``<error>`` value is a negative integer.
 It represents the error value according to the standard POSIX *errorno*.
@@ -1443,7 +1443,7 @@ It is reported to the client as follows:
 
 ::
 
-   #XTCPCLI: <datatype>, <size>
+   #XTCPCLI: <datatype>,<size>
    <data>
 
 * The ``<datatype>`` parameter can accept one of the following values:
@@ -1460,12 +1460,12 @@ Examples
 ::
 
    at#xudpcli=1,"remote.host",2442
-   #XUDPCLI: 2, "connected"
+   #XUDPCLI: 2,"connected"
    OK
    at#xudpsend=1,"Test UDP by hostname"
    #XUDPSEND: 20
    OK
-   #XUDPRECV: 1, 26
+   #XUDPRECV: 1,26
    PONG: Test UDP by hostname
    at#xudpcli=0
    OK
@@ -1516,7 +1516,7 @@ Examples
 ::
 
    at#xudpcli=?
-   #XUDPCLI: (0, 1, 2),<url>,<port>,<sec_tag>
+   #XUDPCLI: (0,1,2),<url>,<port>,<sec_tag>
    OK
 
 UDP send data #XUDPSEND
