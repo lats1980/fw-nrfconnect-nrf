@@ -75,6 +75,7 @@ struct led_effect {
 
 struct led {
 	size_t id;
+	enum ui_led_state state;
 	struct led_effect *effect;
 	uint16_t effect_step;
 	uint16_t effect_substep;

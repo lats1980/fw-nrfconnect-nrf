@@ -14,7 +14,6 @@ config SLM_AT_MODE
 	select AT_CMD
 	select AT_NOTIF
 	select AT_CMD_PARSER
-	select MODEM_INFO
 
 config SLM_AT_MAX_PARAM
 	int "Maximum number of parameters in AT command"
@@ -153,6 +152,7 @@ rsource "src/gps/Kconfig"
 rsource "src/ftp_c/Kconfig"
 rsource "src/mqtt_c/Kconfig"
 rsource "src/http_c/Kconfig"
+rsource "src/stats/Kconfig"
 
 module = SLM
 module-str = serial modem

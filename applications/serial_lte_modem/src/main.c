@@ -164,12 +164,6 @@ void start_execute(void)
 
 	handle_bsdlib_init_ret();
 
-	err = modem_info_init();
-	if (err) {
-		LOG_ERR("Modem info could not be established: %d", err);
-		return;
-	}
-
 	/* Initialize AT Parser */
 	err = at_params_list_init(&at_param_list, CONFIG_SLM_AT_MAX_PARAM);
 	if (err) {
