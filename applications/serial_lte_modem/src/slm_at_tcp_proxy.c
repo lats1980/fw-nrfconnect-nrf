@@ -711,7 +711,8 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			tcp_terminate_connection();
 		}
-		ret = poll(fds, nfds, MSEC_PER_SEC * CONFIG_SLM_TCP_POLL_TIME);
+		/* Poll with infinite timeout to wait for event */
+		ret = poll(fds, nfds, -1);
 		if (ret < 0) {  /* IO error */
 			LOG_WRN("poll() error: %d", -errno);
 			ret = -EIO;
