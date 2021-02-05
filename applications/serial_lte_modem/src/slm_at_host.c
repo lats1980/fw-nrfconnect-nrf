@@ -54,7 +54,7 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #define FATAL_STR	"FATAL ERROR\r\n"
 #define SLM_SYNC_STR	"Ready\r\n"
 
-#define SLM_VERSION	"#XSLMVER: Customized v0.9\r\n"
+#define SLM_VERSION	"#XSLMVER: \"Customized v0.10\"\r\n"
 #define AT_CMD_SLMVER	"AT#XSLMVER"
 #define AT_CMD_SLEEP	"AT#XSLEEP"
 #define AT_CMD_RESET	"AT#XRESET"
