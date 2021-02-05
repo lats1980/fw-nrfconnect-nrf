@@ -206,12 +206,13 @@ static int do_tcp_server_start(uint16_t port)
 	local.sin_port = htons(port);
 	if (!util_get_ipv4_addr(ipv4_addr)) {
 		LOG_ERR("Unable to obtain local IPv4 address");
+		ret = -ENETUNREACH;
 		goto exit;
 	}
 	addr_len = strlen(ipv4_addr);
 	if (addr_len == 0) {
 		LOG_ERR("LTE not connected yet");
-		ret = -EINVAL;
+		ret = -ENETUNREACH;
 		goto exit;
 	}
 	if (!check_for_ipv4(ipv4_addr, addr_len)) {

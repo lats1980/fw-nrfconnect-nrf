@@ -103,7 +103,6 @@ static int64_t rx_start;
 static struct k_work raw_send_work;
 static struct k_work cmd_send_work;
 static struct k_delayed_work uart_recovery_work;
-static int uart_recovery_count;
 static bool uart_recovery_pending;
 static const char termination[3] = { '\0', '\r', '\n' };
 
@@ -277,6 +276,7 @@ static void response_handler(void *context, const char *response)
 
 	/* Forward the data over UART */
 	if (len > 0) {
+		rsp_send("\r\n", 2);
 		rsp_send(response, len);
 	}
 }
@@ -569,6 +569,8 @@ static void silence_timer_handler(struct k_timer *timer)
 		slm_udp_set_datamode_off();
 	}
 	datamode_off_pending = false;
+	/* send URC */
+	rsp_send(OK_STR, sizeof(OK_STR) - 1);
 }
 
 K_TIMER_DEFINE(silence_timer, silence_timer_handler, NULL);
@@ -826,9 +828,13 @@ static void cmd_send(struct k_work *work)
 		state = AT_CMD_ERROR;
 	}
 
+	if (strlen(at_buf) > 0) {
+		rsp_send("\r\n", 2);
+		rsp_send(at_buf, strlen(at_buf));
+	}
+
 	switch (state) {
 	case AT_CMD_OK:
-		rsp_send(at_buf, strlen(at_buf));
 		rsp_send(OK_STR, sizeof(OK_STR) - 1);
 		break;
 	case AT_CMD_ERROR:
