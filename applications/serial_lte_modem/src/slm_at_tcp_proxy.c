@@ -14,6 +14,9 @@
 #include "slm_native_tls.h"
 #include "slm_at_host.h"
 #include "slm_at_tcp_proxy.h"
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
 
 LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
 
@@ -452,6 +455,16 @@ static int tcp_data_save(uint8_t *data, uint32_t length)
 static void tcp_data_handle(uint8_t *data, uint32_t length)
 {
 	int ret;
+
+#if defined(CONFIG_SLM_UI)
+        if (length < NET_IPV4_MTU/3) {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+        } else if (length < 2*NET_IPV4_MTU/3) {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+        } else {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+        }
+#endif
 
 	if (proxy.datamode) {
 		rsp_send(data, length);
@@ -1158,6 +1171,18 @@ void slm_tcp_set_datamode_off(void)
 int slm_tcp_send_datamode(const uint8_t *data, int len)
 {
 	int size = do_tcp_send_datamode(data, len);
+
+#if defined(CONFIG_SLM_UI)
+	if (size > 0) {
+		if (size < NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (size < 2*NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
+	}
+#endif
 
 	LOG_DBG("datamode %d sent", size);
 	return size;

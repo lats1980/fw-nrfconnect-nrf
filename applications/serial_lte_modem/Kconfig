@@ -22,6 +22,13 @@ config SLM_AT_MAX_PARAM
 config SLM_NATIVE_TLS
 	bool "Use Zephyr mbedTLS"
 
+config SLM_UI
+	bool "Enable SLM UI"
+	default y
+
+config SLM_DIAG
+	bool "Enable SLM diagnostic module"
+
 #
 # external XTAL for UART
 #
@@ -144,6 +151,7 @@ rsource "src/gps/Kconfig"
 rsource "src/ftp_c/Kconfig"
 rsource "src/mqtt_c/Kconfig"
 rsource "src/http_c/Kconfig"
+rsource "src/stats/Kconfig"
 
 module = SLM
 module-str = serial modem

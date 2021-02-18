@@ -15,6 +15,9 @@
 #include "slm_at_host.h"
 #include "slm_at_tcpip.h"
 #include "slm_native_tls.h"
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
 
 LOG_MODULE_REGISTER(tcpip, CONFIG_SLM_LOG_LEVEL);
 
@@ -531,6 +534,15 @@ static int do_send(const uint8_t *data, int datalen)
 
 	LOG_DBG("Sent");
 	if (ret >= 0) {
+#if defined(CONFIG_SLM_UI)
+                if (ret < NET_IPV4_MTU/3) {
+                        ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+                } else if (ret < 2*NET_IPV4_MTU/3) {
+                        ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+                } else {
+                        ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+                }
+#endif
 		return 0;
 	} else {
 		return ret;
@@ -573,6 +585,15 @@ static int do_recv(uint16_t length)
 	if (ret == 0) {
 		LOG_WRN("recv() return 0");
 	}
+#if defined(CONFIG_SLM_UI)
+        if (ret < NET_IPV4_MTU/3) {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+        } else if (ret < 2*NET_IPV4_MTU/3) {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+        } else {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+        }
+#endif
 	if (slm_util_hex_check(rx_data, ret)) {
 		char data_hex[ret * 2];
 		int size = ret * 2;
@@ -652,6 +673,15 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 
 	LOG_DBG("UDP sent");
 	if (ret >= 0) {
+#if defined(CONFIG_SLM_UI)
+                if (ret < NET_IPV4_MTU/3) {
+                        ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+                } else if (ret < 2*NET_IPV4_MTU/3) {
+                        ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+                } else {
+                        ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+                }
+#endif
 		return 0;
 	} else {
 		return ret;
@@ -673,6 +703,15 @@ static int do_recvfrom(uint16_t length)
 		}
 		return -errno;
 	}
+#if defined(CONFIG_SLM_UI)
+        if (ret < NET_IPV4_MTU/3) {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+        } else if (ret < 2*NET_IPV4_MTU/3) {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+        } else {
+                ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+        }
+#endif
 	/**
 	 * Datagram sockets in various domains permit zero-length
 	 * datagrams. When such a datagram is received, the return

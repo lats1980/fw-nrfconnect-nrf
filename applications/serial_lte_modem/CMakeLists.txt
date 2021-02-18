@@ -21,10 +21,13 @@ target_sources(app PRIVATE src/slm_at_fota.c)
 # NORDIC SDK APP END
 target_sources_ifdef(CONFIG_SLM_NATIVE_TLS app PRIVATE src/slm_native_tls.c)
 target_sources_ifdef(CONFIG_SLM_NATIVE_TLS app PRIVATE src/slm_at_cmng.c)
+target_sources_ifdef(CONFIG_SLM_UI app PRIVATE src/slm_ui.c)
+target_sources_ifdef(CONFIG_SLM_DIAG app PRIVATE src/slm_diag.c)
 
 add_subdirectory(src/gps)
 add_subdirectory(src/ftp_c)
 add_subdirectory(src/mqtt_c)
 add_subdirectory(src/http_c)
+add_subdirectory(src/stats)
 
 zephyr_include_directories(src)

@@ -39,6 +39,15 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #if defined(CONFIG_SLM_HTTPC)
 #include "slm_at_httpc.h"
 #endif
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
+#if defined(CONFIG_SLM_DIAG)
+#include "slm_diag.h"
+#endif
+#if defined(CONFIG_SLM_STATS)
+#include "slm_stats.h"
+#endif
 
 #define OK_STR		"\r\nOK\r\n"
 #define ERROR_STR	"\r\nERROR\r\n"
@@ -1075,6 +1084,27 @@ int slm_at_host_init(void)
 		return -EFAULT;
 	}
 #endif
+#if defined(CONFIG_SLM_UI)
+	err = slm_ui_init();
+	if (err) {
+		LOG_ERR("Failed to init ui: %d", err);
+		return -EFAULT;
+	}
+#endif
+#if defined(CONFIG_SLM_DIAG)
+	err = slm_diag_init();
+	if (err) {
+		LOG_ERR("Failed to init diagnostic: %d", err);
+		return -EFAULT;
+	}
+#endif
+#if defined(CONFIG_SLM_STATS)
+	err = slm_stats_init();
+	if (err) {
+		LOG_ERR("SLM STATS could not be initialized: %d", err);
+		return -EFAULT;
+	}
+#endif
 	k_work_init(&raw_send_work, raw_send);
 	k_work_init(&cmd_send_work, cmd_send);
 	k_delayed_work_init(&uart_recovery_work, uart_recovery);
@@ -1145,6 +1175,24 @@ void slm_at_host_uninit(void)
 	err = slm_at_httpc_uninit();
 	if (err) {
 		LOG_WRN("HTTP could not be uninitialized: %d", err);
+	}
+#endif
+#if defined(CONFIG_SLM_STATS)
+	err = slm_stats_uninit();
+	if (err) {
+		LOG_WRN("SLM STATS could not be uninitialized: %d", err);
+	}
+#endif
+#if defined(CONFIG_SLM_DIAG)
+	err = slm_diag_uninit();
+	if (err) {
+		LOG_ERR("Failed to uninit diagnostic: %d", err);
+	}
+#endif
+#if defined(CONFIG_SLM_UI)
+	err = slm_ui_uninit();
+	if (err) {
+		LOG_ERR("Failed to uninit ui: %d", err);
 	}
 #endif
 
