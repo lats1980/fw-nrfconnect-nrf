@@ -88,6 +88,7 @@ static struct tcp_proxy_t {
 	int role;		/* Client or Server proxy */
 	bool datamode;		/* Data mode flag*/
 	bool filtermode;	/* Filtering mode flag */
+	uint16_t timeout; /* Peer connection timeout */
 } proxy;
 static struct pollfd fds[MAX_POLL_FD];
 static int nfds;
@@ -396,8 +397,7 @@ static int do_tcp_send(const uint8_t *data, int datalen)
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		/* restart activity timer */
 		if (proxy.role == AT_TCP_ROLE_SERVER) {
-			k_timer_start(&conn_timer,
-				      K_SECONDS(CONFIG_SLM_TCP_CONN_TIME),
+			k_timer_start(&conn_timer, K_SECONDS(proxy.timeout),
 				      K_NO_WAIT);
 		}
 		return 0;
@@ -436,7 +436,7 @@ static int do_tcp_send_datamode(const uint8_t *data, int datalen)
 
 	/* restart activity timer */
 	if (proxy.role == AT_TCP_ROLE_SERVER) {
-		k_timer_start(&conn_timer, K_SECONDS(CONFIG_SLM_TCP_CONN_TIME),
+		k_timer_start(&conn_timer, K_SECONDS(proxy.timeout),
 			K_NO_WAIT);
 	}
 
@@ -575,7 +575,7 @@ static int tcpsvr_input(int infd)
 		nfds++;
 		/* Start a one-shot timer to close the connection */
 		k_timer_start(&conn_timer,
-			      K_SECONDS(CONFIG_SLM_TCP_CONN_TIME),
+			      K_SECONDS(proxy.timeout),
 			      K_NO_WAIT);
 	} else {
 		k_timer_stop(&conn_timer);
@@ -589,7 +589,7 @@ static int tcpsvr_input(int infd)
 		/* Restart conn timer */
 		LOG_DBG("restart timer: POLLIN");
 		k_timer_start(&conn_timer,
-			      K_SECONDS(CONFIG_SLM_TCP_CONN_TIME),
+			      K_SECONDS(proxy.timeout),
 			      K_NO_WAIT);
 	}
 
@@ -611,8 +611,9 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3)
 	nfds = 1;
 	ring_buf_reset(&data_buf);
 	while (true) {
-		if (k_timer_status_get(&conn_timer) > 0) {
-			LOG_WRN("Connecion timeout");
+		if (proxy.timeout > 0 &&
+			k_timer_status_get(&conn_timer) > 0) {
+			LOG_WRN("Connection timeout");
 			tcp_terminate_connection(-ETIMEDOUT);
 		}
 		ret = poll(fds, nfds, MSEC_PER_SEC * CONFIG_SLM_TCP_POLL_TIME);
@@ -840,7 +841,7 @@ static int handle_at_tcp_filter(enum at_cmd_type cmd_type)
 }
 
 /**@brief handle AT#XTCPSVR commands
- *  AT#XTCPSVR=<op>[,<port>[,[sec_tag]]
+ *  AT#XTCPSVR=<op>[,<port>,<timeout>,[sec_tag]]
  *  AT#XTCPSVR?
  *  AT#XTCPSVR=?
  */
@@ -869,7 +870,14 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 				return err;
 			}
 			if (param_count > 3) {
-				at_params_int_get(&at_param_list, 3,
+				err = at_params_short_get(&at_param_list, 3,
+							  &proxy.timeout);
+				if (err) {
+					return err;
+				}
+			}
+			if (param_count > 4) {
+				at_params_int_get(&at_param_list, 4,
 						  &proxy.sec_tag);
 			}
 #if defined(CONFIG_SLM_DATAMODE_HWFC)
@@ -889,8 +897,8 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 	case AT_CMD_TYPE_READ_COMMAND:
 		if (proxy.sock != INVALID_SOCKET &&
 		    proxy.role == AT_TCP_ROLE_SERVER) {
-			sprintf(rsp_buf, "#XTCPSVR: %d,%d,%d\r\n",
-				proxy.sock, proxy.sock_peer, proxy.datamode);
+			sprintf(rsp_buf, "#XTCPSVR: %d,%d,%d,%d\r\n",
+				proxy.sock, proxy.sock_peer, proxy.timeout, proxy.datamode);
 		} else {
 			sprintf(rsp_buf, "#XTCPSVR: %d,%d\r\n",
 				INVALID_SOCKET, INVALID_SOCKET);
@@ -900,7 +908,7 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 		break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "#XTCPSVR: (%d,%d,%d),<port>,<sec_tag>\r\n",
+		sprintf(rsp_buf, "#XTCPSVR: (%d,%d,%d),<port>,<timeout>,<sec_tag>\r\n",
 			AT_SERVER_STOP, AT_SERVER_START,
 			AT_SERVER_START_WITH_DATAMODE);
 		rsp_send(rsp_buf, strlen(rsp_buf));
@@ -1119,6 +1127,7 @@ int slm_at_tcp_proxy_init(void)
 	proxy.sock_peer = INVALID_SOCKET;
 	proxy.role = INVALID_ROLE;
 	proxy.datamode = false;
+	proxy.timeout = CONFIG_SLM_TCP_CONN_TIME;
 	proxy.sec_tag = INVALID_SEC_TAG;
 	nfds = 0;
 	for (int i = 0; i < MAX_POLL_FD; i++) {
