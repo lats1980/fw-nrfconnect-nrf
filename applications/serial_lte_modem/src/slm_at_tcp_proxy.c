@@ -51,15 +51,33 @@ enum slm_tcp_proxy_role {
 enum slm_tcp_proxy_at_cmd_type {
 	AT_TCP_FILTER,
 	AT_TCP_SERVER,
+	AT_TCP_SVR_AA,
+	AT_TCP_SVR_AR,
 	AT_TCP_CLIENT,
 	AT_TCP_SEND,
 	AT_TCP_RECV,
 	AT_TCP_PROXY_MAX
 };
 
+/**@brief Proxy operations for auto accept. */
+enum slm_tcp_proxy_aa_operation {
+	AT_TCP_SVR_AA_OFF,
+	AT_TCP_SVR_AA_ON
+};
+
+/**@brief Proxy operations for accept-reject. */
+enum slm_tcp_proxy_ar_operation {
+	AT_TCP_SVR_AR_REJECT,
+	AT_TCP_SVR_AR_ACCEPT,
+	AT_TCP_SVR_AR_CONNECTING,
+	AT_TCP_SVR_AR_UNKNOWN
+};
+
 /** forward declaration of cmd handlers **/
 static int handle_at_tcp_filter(enum at_cmd_type cmd_type);
 static int handle_at_tcp_server(enum at_cmd_type cmd_type);
+static int handle_at_tcp_server_auto_accept(enum at_cmd_type cmd_type);
+static int handle_at_tcp_server_accept_reject(enum at_cmd_type cmd_type);
 static int handle_at_tcp_client(enum at_cmd_type cmd_type);
 static int handle_at_tcp_send(enum at_cmd_type cmd_type);
 static int handle_at_tcp_recv(enum at_cmd_type cmd_type);
@@ -68,6 +86,8 @@ static int handle_at_tcp_recv(enum at_cmd_type cmd_type);
 static slm_at_cmd_list_t tcp_proxy_at_list[AT_TCP_PROXY_MAX] = {
 	{AT_TCP_FILTER, "AT#XTCPFILTER", handle_at_tcp_filter},
 	{AT_TCP_SERVER, "AT#XTCPSVR", handle_at_tcp_server},
+	{AT_TCP_SVR_AA, "AT#XTCPSVRAA", handle_at_tcp_server_auto_accept},
+	{AT_TCP_SVR_AR, "AT#XTCPSVRAR", handle_at_tcp_server_accept_reject},
 	{AT_TCP_CLIENT, "AT#XTCPCLI", handle_at_tcp_client},
 	{AT_TCP_SEND, "AT#XTCPSEND", handle_at_tcp_send},
 	{AT_TCP_RECV, "AT#XTCPRECV", handle_at_tcp_recv},
@@ -88,7 +108,9 @@ static struct tcp_proxy_t {
 	int role;		/* Client or Server proxy */
 	bool datamode;		/* Data mode flag*/
 	bool filtermode;	/* Filtering mode flag */
-	uint16_t timeout; /* Peer connection timeout */
+	bool aa;                /* Auto accept mode flag*/
+	uint16_t ar;            /* accept-reject flag*/
+	uint16_t timeout;       /* Peer connection timeout */
 } proxy;
 static struct pollfd fds[MAX_POLL_FD];
 static int nfds;
@@ -527,9 +549,30 @@ static int tcpsvr_input(int infd)
 		char peer_addr[INET_ADDRSTRLEN];
 		bool filtered = true;
 
-		/* Accept incoming connection */
+		/* If server auto-accept is on, accept this connection.
+		 * Otherwise, accept the connection according to AT#TCPSVRAR
+		 */
+		if (proxy.aa == AT_TCP_SVR_AA_OFF) {
+			if (proxy.ar == AT_TCP_SVR_AR_UNKNOWN) {
+				proxy.ar = AT_TCP_SVR_AR_CONNECTING;
+				return 0;
+			} else if (proxy.ar == AT_TCP_SVR_AR_CONNECTING) {
+				return 0;
+			} else if (proxy.ar == AT_TCP_SVR_AR_REJECT) {
+				proxy.ar = AT_TCP_SVR_AR_UNKNOWN;
+				ret = accept(proxy.sock,
+					     (struct sockaddr *)&remote, &len);
+				if (ret >= 0) {
+					close(ret);
+				}
+				return 0;
+			} else if (proxy.ar == AT_TCP_SVR_AR_ACCEPT) {
+				proxy.ar = AT_TCP_SVR_AR_UNKNOWN;
+			}
+		}
 		ret = accept(proxy.sock,
 				(struct sockaddr *)&remote, &len);
+		LOG_DBG("accept(): %d", ret);
 		if (ret < 0) {
 			LOG_ERR("accept() failed: %d", -errno);
 			return -errno;
@@ -539,8 +582,6 @@ static int tcpsvr_input(int infd)
 			close(ret);
 			return -ECONNREFUSED;
 		}
-		LOG_DBG("accept(): %d", ret);
-
 		/* Client IPv4 filtering */
 		if (inet_ntop(AF_INET, &remote.sin_addr, peer_addr,
 			INET_ADDRSTRLEN) == NULL) {
@@ -562,13 +603,13 @@ static int tcpsvr_input(int infd)
 				return -ECONNREFUSED;
 			}
 		}
-		sprintf(rsp_buf, "#XTCPSVR: \"%s\",\"connected\"\r\n",
-			peer_addr);
-		rsp_send(rsp_buf, strlen(rsp_buf));
 		proxy.sock_peer = ret;
 		if (proxy.datamode) {
 			enter_datamode();
 		}
+		sprintf(rsp_buf, "#XTCPSVR: \"%s\",\"connected\"\r\n",
+			peer_addr);
+		rsp_send(rsp_buf, strlen(rsp_buf));
 		LOG_DBG("New connection - %d", proxy.sock_peer);
 		fds[nfds].fd = proxy.sock_peer;
 		fds[nfds].events = POLLIN;
@@ -922,6 +963,93 @@ static int handle_at_tcp_server(enum at_cmd_type cmd_type)
 	return err;
 }
 
+/**@brief handle AT#XTCPSVRAA commands
+ *  AT#XTCPSVRAA=<op>
+ *  AT#XTCPSVRAA?
+ *  AT#XTCPSVRAA=?
+ */
+static int handle_at_tcp_server_auto_accept(enum at_cmd_type cmd_type)
+{
+	int err = -EINVAL;
+	uint16_t op;
+
+	switch (cmd_type) {
+	case AT_CMD_TYPE_SET_COMMAND:
+		err = at_params_short_get(&at_param_list, 1, &op);
+		if (err) {
+			return err;
+		}
+		if (op != AT_TCP_SVR_AA_OFF && op != AT_TCP_SVR_AA_ON) {
+			return err;
+		}
+		proxy.aa = op;
+		err = 0;
+		break;
+
+	case AT_CMD_TYPE_READ_COMMAND:
+		sprintf(rsp_buf, "#XTCPSVRAA: %d\r\n", proxy.aa);
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		err = 0;
+		break;
+
+	case AT_CMD_TYPE_TEST_COMMAND:
+		sprintf(rsp_buf, "#XTCPSVRAA: (%d,%d)\r\n",
+			AT_TCP_SVR_AA_OFF, AT_TCP_SVR_AA_ON);
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		err = 0;
+		break;
+
+	default:
+		break;
+	}
+
+	return err;
+}
+
+/**@brief handle AT#XTCPSVRAR commands
+ *  AT#XTCPSVRAR=<op>
+ *  AT#XTCPSVRAR? READ command not supported
+ *  AT#XTCPSVRAR=?
+ */
+static int handle_at_tcp_server_accept_reject(enum at_cmd_type cmd_type)
+{
+	int err = -EINVAL;
+	uint16_t op;
+
+	if (proxy.ar != AT_TCP_SVR_AR_CONNECTING) {
+		return err;
+	}
+
+	switch (cmd_type) {
+	case AT_CMD_TYPE_SET_COMMAND:
+		err = at_params_short_get(&at_param_list, 1, &op);
+		if (err) {
+			return err;
+		}
+		if (op != AT_TCP_SVR_AR_ACCEPT && op != AT_TCP_SVR_AR_REJECT) {
+			return err;
+		}
+		proxy.ar = op;
+		err = 0;
+		break;
+
+	case AT_CMD_TYPE_READ_COMMAND:
+		break;
+
+	case AT_CMD_TYPE_TEST_COMMAND:
+		sprintf(rsp_buf, "#XTCPSVRAR: (%d,%d)\r\n",
+			AT_TCP_SVR_AR_REJECT, AT_TCP_SVR_AR_ACCEPT);
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		err = 0;
+		break;
+
+	default:
+		break;
+	}
+
+	return err;
+}
+
 /**@brief handle AT#XTCPCLI commands
  *  AT#XTCPCLI=<op>[,<url>,<port>[,[sec_tag]]
  *  AT#XTCPCLI?
@@ -1127,6 +1255,8 @@ int slm_at_tcp_proxy_init(void)
 	proxy.sock_peer = INVALID_SOCKET;
 	proxy.role = INVALID_ROLE;
 	proxy.datamode = false;
+	proxy.aa = AT_TCP_SVR_AA_ON;
+	proxy.ar = AT_TCP_SVR_AR_UNKNOWN;
 	proxy.timeout = CONFIG_SLM_TCP_CONN_TIME;
 	proxy.sec_tag = INVALID_SEC_TAG;
 	nfds = 0;
