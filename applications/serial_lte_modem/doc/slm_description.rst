@@ -135,10 +135,17 @@ Check and configure the following configuration options for the sample:
 
 .. option:: CONFIG_SLM_GPIO_WAKEUP - Support of GPIO wakeup
 
-   This option enables using GPIO to wake up from sleep mode.
-   Select this option if you want to test the application with an external CPU.
+   This option enables using GPIO to wake up nRF91 from deep sleep mode.
+   Select this option if you want to support deep sleep of nRF91.
 
-   If this option is not selected, you must reset the kit to exit sleep mode.
+   Note this option is by default selected.
+
+.. option:: CONFIG_SLM_START_SLEEP - Enter sleep on start-up
+
+   This option makes nRF91 enter deep sleep after power on.
+   This option is by default not selected.
+
+   Note this option requires :option:`CONFIG_SLM_GPIO_WAKEUP` is selected.
 
 .. option:: CONFIG_SLM_INTERFACE_PIN - Interface GPIO to wake up or exit idle mode
 

@@ -135,6 +135,7 @@ The ``<shutdown_mode>`` parameter accepts only the following integer values:
 * ``0`` - Enter Idle.
   You can also use the syntax ``AT#XSLEEP``.
 * ``1`` - Enter Sleep.
+* ``2`` - Power off UART.
 
 The default value is 0.
 
@@ -160,6 +161,10 @@ Examples
 ::
 
    AT#XSLEEP=1
+
+::
+
+   AT#XSLEEP=2
 
 ::
 
@@ -195,7 +200,7 @@ Example
 
 ::
 
-   #XSLEEP: (0,1)
+   #XSLEEP: (0,1,2)
    OK
 
 SLM UART #XSLMUART

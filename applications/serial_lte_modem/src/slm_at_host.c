@@ -88,6 +88,7 @@ enum term_modes {
 enum shutdown_modes {
 	SHUTDOWN_MODE_IDLE,
 	SHUTDOWN_MODE_SLEEP,
+	SHUTDOWN_MODE_UART,
 	SHUTDOWN_MODE_INVALID
 };
 
@@ -114,7 +115,7 @@ static uint8_t *uart_tx_buf;
 static K_SEM_DEFINE(tx_done, 0, 1);
 
 /* global functions defined in different files */
-void enter_idle(void);
+void enter_idle(bool full_idle);
 void enter_sleep(bool wake_up);
 
 /* global variable defined in different files */
@@ -190,6 +191,33 @@ bool exit_datamode(void)
 	}
 
 	return false;
+}
+
+int wakeup_uart(void)
+{
+	int err;
+	uint32_t current_state;
+
+	err = device_get_power_state(uart_dev, &current_state);
+	if (err) {
+		LOG_ERR("Device get power_state: %d", err);
+		return err;
+	}
+
+	if (current_state != DEVICE_PM_ACTIVE_STATE) {
+		device_set_power_state(uart_dev, DEVICE_PM_ACTIVE_STATE, NULL, NULL);
+		k_sleep(K_MSEC(100));
+		err = uart_rx_enable(uart_dev, uart_rx_buf[0], sizeof(uart_rx_buf[0]),
+				     UART_RX_TIMEOUT_MS);
+		if (err) {
+			LOG_ERR("Cannot enable rx: %d", err);
+			return err;
+		}
+		k_sem_give(&tx_done);
+		rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);
+	}
+
+	return 0;
 }
 
 bool check_uart_flowcontrol(void)
@@ -308,8 +336,7 @@ static int handle_at_sleep(const char *at_cmd, enum shutdown_modes *mode)
 	if (type == AT_CMD_TYPE_SET_COMMAND) {
 		shutdown_mode = SHUTDOWN_MODE_IDLE;
 		if (at_params_valid_count_get(&at_param_list) > 1) {
-			ret = at_params_short_get(&at_param_list, 1,
-					&shutdown_mode);
+			ret = at_params_short_get(&at_param_list, 1, &shutdown_mode);
 			if (ret < 0) {
 				LOG_ERR("AT parameter error");
 				return -EINVAL;
@@ -317,13 +344,29 @@ static int handle_at_sleep(const char *at_cmd, enum shutdown_modes *mode)
 		}
 		if (shutdown_mode == SHUTDOWN_MODE_IDLE) {
 			slm_at_host_uninit();
-			enter_idle();
+			enter_idle(true);
 			*mode = SHUTDOWN_MODE_IDLE;
 			ret = 0; /*Will send no "OK"*/
 		} else if (shutdown_mode == SHUTDOWN_MODE_SLEEP) {
+#if defined(CONFIG_SLM_GPIO_WAKEUP)
 			slm_at_host_uninit();
 			enter_sleep(true);
 			ret = 0; /* Cannot reach here */
+#else
+			LOG_ERR("Enter sleep without wakeup");
+			ret = -EINVAL;
+#endif
+		} else if (shutdown_mode == SHUTDOWN_MODE_UART) {
+			uart_rx_disable(uart_dev);
+			k_sleep(K_MSEC(100));
+			ret = device_set_power_state(uart_dev, DEVICE_PM_OFF_STATE, NULL, NULL);
+			if (ret) {
+				LOG_ERR("Can't power off uart: %d", ret);
+			} else {
+				enter_idle(false);
+				*mode = SHUTDOWN_MODE_UART;
+				ret = 0; /*Will send no "OK"*/
+			}
 		} else {
 			LOG_ERR("AT parameter error");
 			ret = -EINVAL;
@@ -331,8 +374,8 @@ static int handle_at_sleep(const char *at_cmd, enum shutdown_modes *mode)
 	}
 
 	if (type == AT_CMD_TYPE_TEST_COMMAND) {
-		sprintf(rsp_buf, "#XSLEEP: (%d,%d)\r\n", SHUTDOWN_MODE_IDLE,
-			SHUTDOWN_MODE_SLEEP);
+		sprintf(rsp_buf, "#XSLEEP: (%d,%d,%d)\r\n", SHUTDOWN_MODE_IDLE,
+			SHUTDOWN_MODE_SLEEP, SHUTDOWN_MODE_UART);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		ret = 0;
 	}
