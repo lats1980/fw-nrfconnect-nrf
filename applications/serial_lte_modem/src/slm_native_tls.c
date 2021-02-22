@@ -10,7 +10,7 @@
 LOG_MODULE_REGISTER(slm_tls, CONFIG_SLM_LOG_LEVEL);
 
 /* max buffer length to load credential */
-#define MAX_CRDL_LEN		4096
+#define MAX_CRDL_LEN		5120
 
 /* pointer to credential buffer */
 static uint8_t *crdl;
@@ -52,7 +52,7 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 	ret = modem_key_mgmt_read(slm_tls_map_sectag(sec_tag, 0),
 				  0, crdl + offset, &len);
 	if (ret == 0) {
-		LOG_DBG("Load CA cert %d: Len: %d",
+		LOG_INF("Load CA cert %d: Len: %d",
 			slm_tls_map_sectag(sec_tag, 0), len);
 		len++;
 		ret = tls_credential_add(sec_tag, TLS_CREDENTIAL_CA_CERTIFICATE,
@@ -65,14 +65,14 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 		len = MAX_CRDL_LEN - offset;
 		loaded = true;
 	} else {
-		LOG_DBG("Empty CA cert at %d:", slm_tls_map_sectag(sec_tag, 0));
+		LOG_INF("Empty CA cert at %d:", slm_tls_map_sectag(sec_tag, 0));
 	}
 
 	/* Load server/client certificate */
 	ret = modem_key_mgmt_read(slm_tls_map_sectag(sec_tag, 1), 0,
 				  crdl + offset, &len);
 	if (ret == 0) {
-		LOG_DBG("Load cert %d. Len: %d",
+		LOG_INF("Load cert %d. Len: %d",
 			slm_tls_map_sectag(sec_tag, 1), len);
 		len++;
 		ret = tls_credential_add(sec_tag,
@@ -86,14 +86,14 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 		len = MAX_CRDL_LEN - offset;
 		loaded = true;
 	} else {
-		LOG_DBG("Empty cert at %d:", slm_tls_map_sectag(sec_tag, 1));
+		LOG_INF("Empty cert at %d:", slm_tls_map_sectag(sec_tag, 1));
 	}
 
 	/* Load private key */
 	ret = modem_key_mgmt_read(slm_tls_map_sectag(sec_tag, 2), 0,
 				  crdl + offset, &len);
 	if (ret == 0) {
-		LOG_DBG("Load private key %d. Len: %d",
+		LOG_INF("Load private key %d. Len: %d",
 			slm_tls_map_sectag(sec_tag, 2), len);
 		len++;
 		ret = tls_credential_add(sec_tag, TLS_CREDENTIAL_PRIVATE_KEY,
@@ -104,7 +104,7 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 		}
 		loaded = true;
 	} else {
-		LOG_DBG("Empty private key at %d:",
+		LOG_INF("Empty private key at %d:",
 			slm_tls_map_sectag(sec_tag, 2));
 	}
 
