@@ -95,6 +95,14 @@ config SLM_INTERFACE_PIN
 	default 6 if SLM_CONNECT_UART_0
 	default 31 if SLM_CONNECT_UART_2
 
+config SLM_RI_PIN
+	int "Ring Indicator Pin"
+	default 20
+
+config SLM_RI_DURATION
+	int "Duration the Ring Indicator Pin to be toggled in ms"
+	default 500
+
 #
 # Socket
 #

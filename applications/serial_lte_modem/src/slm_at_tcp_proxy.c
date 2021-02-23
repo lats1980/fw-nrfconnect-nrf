@@ -17,6 +17,7 @@
 #if defined(CONFIG_SLM_UI)
 #include "slm_ui.h"
 #endif
+#include <drivers/gpio.h>
 
 LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
 
@@ -125,6 +126,8 @@ bool check_uart_flowcontrol(void);
 extern struct at_param_list at_param_list;
 extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
 extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
+
+extern const struct device *ui_gpio_dev;
 
 /** forward declaration of thread function **/
 static void tcpcli_thread_func(void *p1, void *p2, void *p3);
@@ -583,13 +586,25 @@ static void terminate_connection_wk(struct k_work *work)
 
 static int tcpsvr_input(int infd)
 {
-	int ret;
+	int ret, err;
 
 	if (fds[infd].fd == proxy.sock) {
 		socklen_t len = sizeof(struct sockaddr_in);
 		char peer_addr[INET_ADDRSTRLEN];
 		bool filtered = true;
 
+		/* Toggle RI pins for pre-defined duration */
+		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 1);
+		if (err) {
+			LOG_ERR("Cannot write RI gpio high");
+			return err;
+		}
+		k_sleep(K_MSEC(CONFIG_SLM_RI_DURATION));
+		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 0);
+		if (err) {
+			LOG_ERR("Cannot write RI gpio low");
+			return err;
+		}
 		/* If server auto-accept is on, accept this connection.
 		 * Otherwise, accept the connection according to AT#TCPSVRAR
 		 */
