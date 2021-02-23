@@ -274,9 +274,28 @@ static int do_tcp_server_stop(void)
 	return 0;
 }
 
-static int do_tcp_client_connect(const char *url, uint16_t port)
+static int do_tcp_client_connect(const char *url,
+				 const char *hostname,
+				 uint16_t port)
 {
 	int ret;
+
+#if defined(CONFIG_SLM_NATIVE_TLS)
+	if (proxy.sec_tag != INVALID_SEC_TAG) {
+		ret = slm_tls_loadcrdl(proxy.sec_tag);
+		if (ret < 0) {
+			LOG_ERR("Fail to load credential: %d", ret);
+			proxy.sec_tag = INVALID_SEC_TAG;
+			goto exit;
+		}
+	}
+#else
+	if (proxy.sec_tag != INVALID_SEC_TAG) {
+		LOG_ERR("Not supported");
+		ret = -EINVAL;
+		goto exit;
+	}
+#endif
 
 	/* Open socket */
 	if (proxy.sec_tag == INVALID_SEC_TAG) {
@@ -336,6 +355,21 @@ static int do_tcp_client_connect(const char *url, uint16_t port)
 		freeaddrinfo(result);
 	}
 
+	if (proxy.sec_tag != INVALID_SEC_TAG) {
+		if (strlen(hostname) > 0) {
+			ret = setsockopt(proxy.sock, SOL_TLS,
+					 TLS_HOSTNAME, hostname,
+					 strlen(hostname));
+		} else {
+			ret = setsockopt(proxy.sock, SOL_TLS,
+					 TLS_HOSTNAME, url, strlen(url));
+		}
+		if (ret < 0) {
+			LOG_ERR("Failed to set TLS_HOSTNAME");
+			goto exit;
+		}
+	}
+
 	ret = connect(proxy.sock, (struct sockaddr *)&remote,
 		sizeof(struct sockaddr_in));
 	if (ret < 0) {
@@ -358,6 +392,13 @@ exit:
 		if (proxy.sock != INVALID_SOCKET) {
 			close(proxy.sock);
 		}
+#if defined(CONFIG_SLM_NATIVE_TLS)
+		if (proxy.sec_tag != INVALID_SEC_TAG) {
+			if (slm_tls_unloadcrdl(proxy.sec_tag) != 0) {
+				LOG_ERR("Fail to unload credential");
+			}
+		}
+#endif
 		slm_at_tcp_proxy_init();
 		sprintf(rsp_buf, "#XTCPCLI: %d\r\n", ret);
 		rsp_send(rsp_buf, strlen(rsp_buf));
@@ -796,6 +837,14 @@ exit:
 		}
 	}
 	in_datamode = proxy.datamode;
+#if defined(CONFIG_SLM_NATIVE_TLS)
+	if (proxy.sec_tag != INVALID_SEC_TAG) {
+		ret = slm_tls_unloadcrdl(proxy.sec_tag);
+		if (ret < 0) {
+			LOG_ERR("Fail to unload credential: %d", ret);
+		}
+	}
+#endif
 	slm_at_tcp_proxy_init();
 	sprintf(rsp_buf, "#XTCPCLI: %d,\"disconnected\"\r\n", ret);
 	rsp_send(rsp_buf, strlen(rsp_buf));
@@ -1051,7 +1100,7 @@ static int handle_at_tcp_server_accept_reject(enum at_cmd_type cmd_type)
 }
 
 /**@brief handle AT#XTCPCLI commands
- *  AT#XTCPCLI=<op>[,<url>,<port>[,[sec_tag]]
+ *  AT#XTCPCLI=<op>[,<url>,<port>[,[sec_tag],[hostname]]
  *  AT#XTCPCLI?
  *  AT#XTCPCLI=?
  */
@@ -1071,7 +1120,9 @@ static int handle_at_tcp_client(enum at_cmd_type cmd_type)
 		    op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
 			uint16_t port;
 			char url[TCPIP_MAX_URL];
+			char hostname[TCPIP_MAX_HOST_NAME_LEN];
 			int size = TCPIP_MAX_URL;
+			int hn_size = TCPIP_MAX_HOST_NAME_LEN;
 
 			if (proxy.sock != INVALID_SOCKET) {
 				LOG_ERR("Client is already running.");
@@ -1090,13 +1141,20 @@ static int handle_at_tcp_client(enum at_cmd_type cmd_type)
 				at_params_int_get(&at_param_list,
 						  4, &proxy.sec_tag);
 			}
+			if (param_count > 5) {
+				err = util_string_get(&at_param_list,
+							5, hostname, &hn_size);
+				if (err) {
+					return err;
+				}
+			}
 #if defined(CONFIG_SLM_DATAMODE_HWFC)
 			if (op == AT_CLIENT_CONNECT_WITH_DATAMODE &&
 			    !check_uart_flowcontrol()) {
 				return -EINVAL;
 			}
 #endif
-			err = do_tcp_client_connect(url, port);
+			err = do_tcp_client_connect(url, hostname, port);
 			if (err == 0 &&
 			    op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
 				proxy.datamode = true;
@@ -1115,7 +1173,7 @@ static int handle_at_tcp_client(enum at_cmd_type cmd_type)
 
 	case AT_CMD_TYPE_TEST_COMMAND:
 		sprintf(rsp_buf,
-			"#XTCPCLI: (%d,%d,%d),<url>,<port>,<sec_tag>\r\n",
+			"#XTCPCLI: (%d,%d,%d),<url>,<port>,<sec_tag>,<hostname>\r\n",
 			AT_CLIENT_DISCONNECT, AT_CLIENT_CONNECT,
 			AT_CLIENT_CONNECT_WITH_DATAMODE);
 		rsp_send(rsp_buf, strlen(rsp_buf));
