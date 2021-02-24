@@ -28,7 +28,7 @@ LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
 #define MAX_POLL_FD		2
 
 /* Some features need future modem firmware support */
-#define SLM_TCP_PROXY_FUTURE_FEATURE	0
+#define SLM_TCP_PROXY_FUTURE_FEATURE	1
 
 /**@brief Proxy operations. */
 enum slm_tcp_proxy_operation {
