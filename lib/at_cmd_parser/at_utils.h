@@ -274,6 +274,11 @@ static bool is_clac(const char *str)
 		return false;
 	}
 
+	if ((toupper(str[2]) == '%') && (toupper(str[3]) == 'C') && (toupper(str[4]) == 'M')) {
+		/* Ignore AT%CM to avoid false detect (AT%CMNG) */
+		return false;
+	}
+
 	return true;
 }
 /** @} */
