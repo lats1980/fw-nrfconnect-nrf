@@ -35,6 +35,8 @@ manifest:
       url-base: https://github.com/alexa
     - name: nordicsemi
       url-base: https://github.com/NordicSemiconductor
+    - name: zephyrproject-customized
+      url-base: https://github.com/lats1980
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -52,7 +54,7 @@ manifest:
     # https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/guides/modules.html
     - name: zephyr
       repo-path: sdk-zephyr
-      revision: v2.4.99-ncs1
+      revision: v2.4.99-ncs1-customized
       import:
         # In addition to the zephyr repository itself, NCS also
         # imports the contents of zephyr/west.yml at the above
@@ -87,6 +89,7 @@ manifest:
           - segger
           - tinycbor
           - tinycrypt
+      remote: zephyrproject-customized
 
     # NCS repositories.
     #
