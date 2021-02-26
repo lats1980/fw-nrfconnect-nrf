@@ -82,6 +82,7 @@ static int handle_at_tcp_server_accept_reject(enum at_cmd_type cmd_type);
 static int handle_at_tcp_client(enum at_cmd_type cmd_type);
 static int handle_at_tcp_send(enum at_cmd_type cmd_type);
 static int handle_at_tcp_recv(enum at_cmd_type cmd_type);
+extern int wakeup_uart(void);
 
 /**@brief SLM AT Command list type. */
 static slm_at_cmd_list_t tcp_proxy_at_list[AT_TCP_PROXY_MAX] = {
@@ -674,6 +675,10 @@ static int tcpsvr_input(int infd)
 		proxy.sock_peer = ret;
 		if (proxy.datamode) {
 			enter_datamode(do_tcp_send_datamode);
+		}
+		err = wakeup_uart();
+		if (err != 0) {
+			LOG_ERR("Fail to wake up UART");
 		}
 		sprintf(rsp_buf, "#XTCPSVR: \"%s\",\"connected\"\r\n",
 			peer_addr);
