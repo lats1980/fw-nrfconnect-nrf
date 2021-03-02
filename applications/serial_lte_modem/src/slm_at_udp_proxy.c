@@ -424,12 +424,17 @@ static int handle_at_udp_server(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		if (op == AT_SERVER_START || op == AT_SERVER_START_WITH_DATAMODE) {
-			uint16_t port;
+		if (op == AT_SERVER_START ||
+		    op == AT_SERVER_START_WITH_DATAMODE) {
+			int32_t port;
 
-			err = at_params_short_get(&at_param_list, 2, &port);
+			err = at_params_int_get(&at_param_list, 2, &port);
 			if (err) {
 				return err;
+			}
+			if (!check_port_range(port)) {
+				LOG_ERR("Invalid port");
+				return -EINVAL;
 			}
 			if (udp_sock > 0) {
 				LOG_WRN("Server is running");
@@ -441,7 +446,7 @@ static int handle_at_udp_server(enum at_cmd_type cmd_type)
 				return -EINVAL;
 			}
 #endif
-			err = do_udp_server_start(port);
+			err = do_udp_server_start((uint16_t)port);
 			if (err == 0 && op == AT_SERVER_START_WITH_DATAMODE) {
 				udp_datamode = true;
 				enter_datamode(do_udp_send_datamode);
@@ -497,8 +502,9 @@ static int handle_at_udp_client(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		if (op == AT_CLIENT_CONNECT || op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
-			uint16_t port;
+		if (op == AT_CLIENT_CONNECT ||
+		    op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
+			int32_t port;
 			char url[TCPIP_MAX_URL];
 			int size = TCPIP_MAX_URL;
 			sec_tag_t sec_tag = INVALID_SEC_TAG;
@@ -507,9 +513,13 @@ static int handle_at_udp_client(enum at_cmd_type cmd_type)
 			if (err) {
 				return err;
 			}
-			err = at_params_short_get(&at_param_list, 3, &port);
+			err = at_params_int_get(&at_param_list, 3, &port);
 			if (err) {
 				return err;
+			}
+			if (!check_port_range(port)) {
+				LOG_ERR("Invalid port");
+				return -EINVAL;
 			}
 			if (at_params_valid_count_get(&at_param_list) > 4) {
 				at_params_int_get(&at_param_list, 4, &sec_tag);
@@ -520,7 +530,7 @@ static int handle_at_udp_client(enum at_cmd_type cmd_type)
 				return -EINVAL;
 			}
 #endif
-			err = do_udp_client_connect(url, port, sec_tag);
+			err = do_udp_client_connect(url, (uint16_t)port, sec_tag);
 			if (err == 0 &&
 			    op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
 				udp_datamode = true;

@@ -882,7 +882,7 @@ static int handle_at_socketopt(enum at_cmd_type cmd_type)
 static int handle_at_bind(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
-	uint16_t port;
+	int32_t port;
 
 	if (client.sock < 0) {
 		LOG_ERR("Socket not opened yet");
@@ -891,11 +891,15 @@ static int handle_at_bind(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		err = at_params_short_get(&at_param_list, 1, &port);
+		err = at_params_int_get(&at_param_list, 1, &port);
 		if (err < 0) {
 			return err;
 		}
-		err = do_bind(port);
+		if (!check_port_range(port)) {
+			LOG_ERR("Invalid port");
+			return -EINVAL;
+		}
+		err = do_bind((uint16_t)port);
 		break;
 
 	default:
@@ -915,7 +919,7 @@ static int handle_at_connect(enum at_cmd_type cmd_type)
 	int err = -EINVAL;
 	char url[TCPIP_MAX_URL];
 	int size = TCPIP_MAX_URL;
-	uint16_t port;
+	int32_t port;
 
 	if (client.sock < 0) {
 		LOG_ERR("Socket not opened yet");
@@ -932,11 +936,15 @@ static int handle_at_connect(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		err = at_params_short_get(&at_param_list, 2, &port);
+		err = at_params_int_get(&at_param_list, 2, &port);
 		if (err) {
 			return err;
 		}
-		err = do_connect(url, port);
+		if (!check_port_range(port)) {
+			LOG_ERR("Invalid port");
+			return -EINVAL;
+		}
+		err = do_connect(url, (uint16_t)port);
 		break;
 
 	case AT_CMD_TYPE_READ_COMMAND:
@@ -1126,7 +1134,7 @@ static int handle_at_sendto(enum at_cmd_type cmd_type)
 	int err = -EINVAL;
 	char url[TCPIP_MAX_URL];
 	int size = TCPIP_MAX_URL;
-	uint16_t port;
+	int32_t port;
 	uint16_t datatype;
 	char data[NET_IPV4_MTU];
 
@@ -1146,9 +1154,13 @@ static int handle_at_sendto(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		err = at_params_short_get(&at_param_list, 2, &port);
+		err = at_params_int_get(&at_param_list, 2, &port);
 		if (err) {
 			return err;
+		}
+		if (!check_port_range(port)) {
+			LOG_ERR("Invalid port");
+			return -EINVAL;
 		}
 		err = at_params_short_get(&at_param_list, 3, &datatype);
 		if (err) {
@@ -1167,7 +1179,7 @@ static int handle_at_sendto(enum at_cmd_type cmd_type)
 				err = do_sendto(url, port, data_hex, err);
 			}
 		} else {
-			err = do_sendto(url, port, data, size);
+			err = do_sendto(url, (uint16_t)port, data, size);
 		}
 		break;
 
