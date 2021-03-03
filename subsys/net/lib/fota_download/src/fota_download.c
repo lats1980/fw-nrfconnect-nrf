@@ -104,7 +104,7 @@ static int download_client_callback(const struct download_client_evt *event)
 				return err;
 			}
 			first_fragment = false;
-			int img_type = dfu_target_img_type(event->fragment.buf,
+			img_type = dfu_target_img_type(event->fragment.buf,
 							event->fragment.len);
 			err = dfu_target_init(img_type, file_size,
 					      dfu_target_callback_handler);
