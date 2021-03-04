@@ -70,6 +70,7 @@ static bool udp_datamode;
 void rsp_send(const uint8_t *str, size_t len);
 int enter_datamode(slm_data_mode_handler_t handler);
 bool check_uart_flowcontrol(void);
+bool exit_datamode(void);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
@@ -287,10 +288,13 @@ static int do_udp_send(const uint8_t *data, int datalen)
 		if (ret < 0) {
 			LOG_ERR("send() failed: %d", -errno);
 			if (errno != EAGAIN && errno != ETIMEDOUT) {
-				do_udp_server_stop(-errno);
-			} else {
 				sprintf(rsp_buf, "#XUDPSEND: %d\r\n", -errno);
 				rsp_send(rsp_buf, strlen(rsp_buf));
+				if (udp_server_role) {
+					do_udp_server_stop(-errno);
+				} else {
+					do_udp_client_disconnect();
+				}
 			}
 			ret = -errno;
 			break;
@@ -298,9 +302,9 @@ static int do_udp_send(const uint8_t *data, int datalen)
 		offset += ret;
 	}
 
-	sprintf(rsp_buf, "#XUDPSEND: %d\r\n", offset);
-	rsp_send(rsp_buf, strlen(rsp_buf));
 	if (ret >= 0) {
+		sprintf(rsp_buf, "#XUDPSEND: %d\r\n", offset);
+		rsp_send(rsp_buf, strlen(rsp_buf));
 		return 0;
 	} else {
 		return ret;
@@ -322,7 +326,14 @@ static int do_udp_send_datamode(const uint8_t *data, int datalen)
 		}
 		if (ret < 0) {
 			LOG_ERR("send() failed: %d", -errno);
-			ret = -errno;
+			if (errno != EAGAIN && errno != ETIMEDOUT) {
+				(void)exit_datamode();
+				if (udp_server_role) {
+					do_udp_server_stop(-errno);
+				} else {
+					do_udp_client_disconnect();
+				}
+			}
 			break;
 		}
 		offset += ret;
