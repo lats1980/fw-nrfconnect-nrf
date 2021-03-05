@@ -8,3 +8,26 @@
 	cts-pin = <13>;
 	hw-flow-control;
 };
+
+&i2c2 {
+	status = "disabled";
+};
+
+&i2c1 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	sda-pin = <22>;
+	scl-pin = <21>;
+	
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	maxl7261@36 {
+		compatible = "maxim,max17261";
+		reg = <0x36>;
+		label = "MAX17261";
+	};	
+};
+
+&uart1 {
+	status = "disabled";
+};
