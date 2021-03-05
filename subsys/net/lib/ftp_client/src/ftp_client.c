@@ -60,6 +60,10 @@ static int parse_return_code(const uint8_t *message, int success_code)
 	char code_str[6]; /* max 1xxxx*/
 	int ret = FTP_CODE_500;
 
+	if (success_code == FTP_CODE_ANY) {
+		return success_code;
+	}
+
 	sprintf(code_str, "%d ", success_code);
 	if (strstr(message, code_str)) {
 		ret = success_code;
@@ -458,14 +462,10 @@ int ftp_open(const char *hostname, uint16_t port, int sec_tag)
 		close(client.cmd_sock);
 		return ret;
 	}
-	ret = do_ftp_recv_ctrl(true, FTP_CODE_200);
-	if (ret != FTP_CODE_200) {
-		close(client.cmd_sock);
-		return ret;
-	}
+	(void)do_ftp_recv_ctrl(true, FTP_CODE_ANY);
 
 	LOG_DBG("FTP opened");
-	return ret;
+	return FTP_CODE_200;
 }
 
 int ftp_login(const char *username, const char *password)
