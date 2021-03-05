@@ -48,6 +48,9 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #if defined(CONFIG_SLM_STATS)
 #include "slm_stats.h"
 #endif
+#if defined(CONFIG_SLM_TWI)
+#include "slm_at_twi.h"
+#endif
 
 #define OK_STR		"\r\nOK\r\n"
 #define ERROR_STR	"\r\nERROR\r\n"
@@ -317,6 +320,9 @@ static void handle_at_clac(void)
 #endif
 #if defined(CONFIG_SLM_HTTPC)
 	slm_at_httpc_clac();
+#endif
+#if defined(CONFIG_SLM_TWI)
+	slm_at_twi_clac();
 #endif
 }
 
@@ -822,7 +828,16 @@ static void cmd_send(struct k_work *work)
 		goto done;
 	}
 #endif
-
+#if defined(CONFIG_SLM_TWI)
+	err = slm_at_twi_parse(at_buf);
+	if (err == 0) {
+		rsp_send(OK_STR, sizeof(OK_STR) - 1);
+		goto done;
+	} else if (err != -ENOENT) {
+		rsp_send(ERROR_STR, sizeof(ERROR_STR) - 1);
+		goto done;
+	}
+#endif
 	/* Send to modem */
 	err = at_cmd_write(at_buf, at_buf, sizeof(at_buf), &state);
 	if (err < 0) {
@@ -1153,6 +1168,13 @@ int slm_at_host_init(void)
 		return -EFAULT;
 	}
 #endif
+#if defined(CONFIG_SLM_TWI)
+	err = slm_at_twi_init();
+	if (err) {
+		LOG_ERR("TWI could not be initialized: %d", err);
+		return -EFAULT;
+	}
+#endif
 	k_work_init(&raw_send_work, raw_send);
 	k_work_init(&cmd_send_work, cmd_send);
 	k_delayed_work_init(&uart_recovery_work, uart_recovery);
@@ -1241,6 +1263,12 @@ void slm_at_host_uninit(void)
 	err = slm_ui_uninit();
 	if (err) {
 		LOG_ERR("Failed to uninit ui: %d", err);
+	}
+#endif
+#if defined(CONFIG_SLM_TWI)
+	err = slm_at_twi_uninit();
+	if (err) {
+		LOG_ERR("TWI could not be uninit: %d", err);
 	}
 #endif
 
