@@ -356,12 +356,10 @@ static void udp_thread_func(void *p1, void *p2, void *p3)
 			continue;
 		} else {
 			if (udp_server_role) {
-				ret = recvfrom(udp_sock, rx_data,
-					sizeof(rx_data), 0,
+				ret = recvfrom(udp_sock, (void *)rx_data, sizeof(rx_data), 0,
 					(struct sockaddr *)&remote, &size);
 			} else {
-				ret = recv(udp_sock, rx_data,
-					sizeof(rx_data), 0);
+				ret = recv(udp_sock, (void *)rx_data, sizeof(rx_data), 0);
 			}
 		}
 		if (ret < 0) {
@@ -558,8 +556,7 @@ int handle_at_udp_send(enum at_cmd_type cmd_type)
 	char data[NET_IPV4_MTU];
 	int size = NET_IPV4_MTU;
 
-	if (remote.sin_family == AF_UNSPEC ||
-	    remote.sin_port == INVALID_PORT) {
+	if (remote.sin_family == AF_UNSPEC) {
 		return err;
 	}
 
@@ -600,7 +597,6 @@ int slm_at_udp_proxy_init(void)
 	udp_datamode = false;
 	udp_server_role = false;
 	remote.sin_family = AF_UNSPEC;
-	remote.sin_port = INVALID_PORT;
 
 	return 0;
 }
@@ -609,7 +605,7 @@ int slm_at_udp_proxy_init(void)
  */
 int slm_at_udp_proxy_uninit(void)
 {
-	int ret;
+	int ret = 0;
 
 	if (udp_sock != INVALID_SOCKET) {
 		k_thread_abort(udp_thread_id);
@@ -621,7 +617,7 @@ int slm_at_udp_proxy_uninit(void)
 		udp_sock = INVALID_SOCKET;
 	}
 
-	return 0;
+	return ret;
 }
 
 
