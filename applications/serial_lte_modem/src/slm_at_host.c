@@ -18,6 +18,7 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 
 #include "slm_util.h"
 #include "slm_at_host.h"
+#include "slm_at_fota.h"
 
 #define OK_STR		"\r\nOK\r\n"
 #define ERROR_STR	"\r\nERROR\r\n"
@@ -61,6 +62,7 @@ static K_SEM_DEFINE(tx_done, 0, 1);
 int slm_at_parse(const char *at_cmd);
 int slm_at_init(void);
 void slm_at_uninit(void);
+int slm_setting_uart_save(void);
 
 /* global variable used across different files */
 struct at_param_list at_param_list;         /* For AT parser */
@@ -68,6 +70,10 @@ char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2]; /* SLM URC and socket data */
 uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];  /* Socket RX raw data */
 uint16_t datamode_size_limit;               /* Send trigger by size in data mode */
 uint16_t datamode_time_limit;               /* Send trigger by time in data mode */
+
+/* global variable defined in different files */
+extern bool uart_configured;
+extern struct uart_config slm_uart;
 
 void rsp_send(const uint8_t *str, size_t len)
 {
@@ -194,54 +200,22 @@ int poweron_uart(void)
 
 bool check_uart_flowcontrol(void)
 {
-	int err;
-	struct uart_config cfg = {
-		.flow_ctrl = UART_CFG_FLOW_CTRL_NONE
-	};
-
-	err = uart_config_get(uart_dev, &cfg);
-	if (err) {
-		LOG_ERR("uart_config_get: %d", err);
-		return false;
-	}
-	return (cfg.flow_ctrl == UART_CFG_FLOW_CTRL_RTS_CTS);
+	return (slm_uart.flow_ctrl == UART_CFG_FLOW_CTRL_RTS_CTS);
 }
 
 int set_uart_baudrate(uint32_t baudrate)
 {
 	int err;
-	struct uart_config cfg;
 
 	LOG_DBG("Set uart baudrate to: %d", baudrate);
 
-	err = uart_config_get(uart_dev, &cfg);
-	if (err != 0) {
-		LOG_ERR("uart_config_get: %d", err);
-		return err;
-	}
-	cfg.baudrate = baudrate;
-	err = uart_configure(uart_dev, &cfg);
+	slm_uart.baudrate = baudrate;
+	err = uart_configure(uart_dev, &slm_uart);
 	if (err != 0) {
 		LOG_ERR("uart_configure: %d", err);
-		return err;
 	}
 
 	return err;
-}
-
-int get_uart_baudrate(void)
-{
-	int err;
-	struct uart_config cfg = {
-		.baudrate = 0
-	};
-
-	err = uart_config_get(uart_dev, &cfg);
-	if (err) {
-		LOG_ERR("uart_config_get: %d", err);
-		return -1;
-	}
-	return (int)cfg.baudrate;
 }
 
 bool verify_datamode_control(uint16_t size_limit, uint16_t time_limit)
@@ -700,6 +674,22 @@ int slm_at_host_init(void)
 		LOG_ERR("Cannot bind UART device\n");
 		return -EINVAL;
 	}
+	/* Save UART configuration to setting page */
+	if (!uart_configured) {
+		err = uart_config_get(uart_dev, &slm_uart);
+		if (err != 0) {
+			LOG_ERR("uart_config_get: %d", err);
+			return err;
+		}
+		err = slm_setting_uart_save();
+		if (err != 0) {
+			LOG_ERR("uart_config_get: %d", err);
+			return err;
+		}
+		uart_configured = true;
+	} /* else re-config UART based on setting page */
+	LOG_DBG("UART baud: %d d/p/s-bits: %d/%d/%d HWFC: %d", slm_uart.baudrate,
+		slm_uart.data_bits, slm_uart.parity, slm_uart.stop_bits, slm_uart.flow_ctrl);
 	/* Wait for the UART line to become valid */
 	start_time = k_uptime_get_32();
 	do {
@@ -754,6 +744,7 @@ int slm_at_host_init(void)
 	k_delayed_work_init(&uart_recovery_work, uart_recovery);
 	k_sem_give(&tx_done);
 	rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);
+	slm_fota_post_process();
 
 	LOG_DBG("at_host init done");
 	return err;
