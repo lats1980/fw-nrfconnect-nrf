@@ -26,20 +26,6 @@ enum slm_twi_at_cmd_type {
 	AT_TWI_MAX
 };
 
-/** forward declaration of cmd handlers **/
-static int handle_at_twi_open(enum at_cmd_type cmd_type);
-static int handle_at_twi_write(enum at_cmd_type cmd_type);
-static int handle_at_twi_read(enum at_cmd_type cmd_type);
-static int handle_at_twi_write_read(enum at_cmd_type cmd_type);
-
-/**@brief SLM AT Command list type. */
-static slm_at_cmd_list_t twi_at_list[AT_TWI_MAX] = {
-	{AT_TWI_OPEN, "AT#XTWIOP", handle_at_twi_open},
-	{AT_TWI_WRITE, "AT#XTWIW", handle_at_twi_write},
-	{AT_TWI_READ, "AT#XTWIR", handle_at_twi_read},
-	{AT_TWI_WRITE_READ, "AT#XTWIWR", handle_at_twi_write_read},
-};
-
 static const struct device *slm_twi_dev[TWI_MAX_INSTANCE];
 
 /* global functions defined in different files */
@@ -187,7 +173,7 @@ static int do_twi_write_read(uint16_t index, uint16_t dev_addr,
  *  AT#XTWIOP? READ command not supported
  *  AT#XTWIOP=?
  */
-static int handle_at_twi_open(enum at_cmd_type cmd_type)
+int handle_at_twi_open(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 
@@ -223,7 +209,7 @@ static int handle_at_twi_open(enum at_cmd_type cmd_type)
  *  AT#XTWIW? READ command not supported
  *  AT#XTWIW=?
  */
-static int handle_at_twi_write(enum at_cmd_type cmd_type)
+int handle_at_twi_write(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t index, dev_addr;
@@ -280,7 +266,7 @@ static int handle_at_twi_write(enum at_cmd_type cmd_type)
  *  AT#XTWIR? READ command not supported
  *  AT#XTWIR=?
  */
-static int handle_at_twi_read(enum at_cmd_type cmd_type)
+int handle_at_twi_read(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t index, dev_addr, num_read;
@@ -339,7 +325,7 @@ static int handle_at_twi_read(enum at_cmd_type cmd_type)
  *  AT#XTWIWR? READ command not supported
  *  AT#XTWIWR=?
  */
-static int handle_at_twi_write_read(enum at_cmd_type cmd_type)
+int handle_at_twi_write_read(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t index, dev_addr, num_read;
@@ -401,40 +387,6 @@ static int handle_at_twi_write_read(enum at_cmd_type cmd_type)
 	}
 
 	return err;
-}
-
-/**@brief API to handle TWI AT commands
- */
-int slm_at_twi_parse(const char *at_cmd)
-{
-	int ret = -ENOENT;
-	enum at_cmd_type type;
-
-	for (int i = 0; i < AT_TWI_MAX; i++) {
-		if (slm_util_cmd_casecmp(at_cmd, twi_at_list[i].string)) {
-			ret = at_parser_params_from_str(at_cmd, NULL,
-						&at_param_list);
-			if (ret) {
-				LOG_ERR("Failed to parse AT command %d", ret);
-				return -EINVAL;
-			}
-			type = at_parser_cmd_type_get(at_cmd);
-			ret = twi_at_list[i].handler(type);
-			break;
-		}
-	}
-
-	return ret;
-}
-
-/**@brief API to list TWI AT commands
- */
-void slm_at_twi_clac(void)
-{
-	for (int i = 0; i < AT_TWI_MAX; i++) {
-		sprintf(rsp_buf, "%s\r\n", twi_at_list[i].string);
-		rsp_send(rsp_buf, strlen(rsp_buf));
-	}
 }
 
 int slm_at_twi_init(void)

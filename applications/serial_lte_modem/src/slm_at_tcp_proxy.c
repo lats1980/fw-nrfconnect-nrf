@@ -47,6 +47,20 @@ enum slm_tcp_proxy_role {
 	AT_TCP_ROLE_SERVER
 };
 
+/**@brief Proxy operations for auto accept. */
+enum slm_tcp_proxy_aa_operation {
+	AT_TCP_SVR_AA_OFF,
+	AT_TCP_SVR_AA_ON
+};
+
+/**@brief Proxy operations for accept-reject. */
+enum slm_tcp_proxy_ar_operation {
+	AT_TCP_SVR_AR_REJECT,
+	AT_TCP_SVR_AR_ACCEPT,
+	AT_TCP_SVR_AR_CONNECTING,
+	AT_TCP_SVR_AR_UNKNOWN
+};
+
 static char ip_allowlist[CONFIG_SLM_TCP_FILTER_SIZE][INET_ADDRSTRLEN];
 RING_BUF_DECLARE(data_buf, CONFIG_SLM_SOCKET_RX_MAX * 2);
 static struct k_thread tcp_thread;
@@ -81,6 +95,8 @@ extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
 extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
 
 extern const struct device *ui_gpio_dev;
+
+extern int poweron_uart(void);
 
 /** forward declaration of thread function **/
 static void tcpcli_thread_func(void *p1, void *p2, void *p3);
@@ -629,7 +645,7 @@ static int tcpsvr_input(int infd)
 		if (proxy.datamode) {
 			enter_datamode(do_tcp_send_datamode);
 		}
-		err = wakeup_uart();
+		err = poweron_uart();
 		if (err != 0) {
 			LOG_ERR("Fail to wake up UART");
 		}
@@ -1002,7 +1018,7 @@ int handle_at_tcp_server(enum at_cmd_type cmd_type)
  *  AT#XTCPSVRAA?
  *  AT#XTCPSVRAA=?
  */
-static int handle_at_tcp_server_auto_accept(enum at_cmd_type cmd_type)
+int handle_at_tcp_server_auto_accept(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t op;
@@ -1045,7 +1061,7 @@ static int handle_at_tcp_server_auto_accept(enum at_cmd_type cmd_type)
  *  AT#XTCPSVRAR? READ command not supported
  *  AT#XTCPSVRAR=?
  */
-static int handle_at_tcp_server_accept_reject(enum at_cmd_type cmd_type)
+int handle_at_tcp_server_accept_reject(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t op;
