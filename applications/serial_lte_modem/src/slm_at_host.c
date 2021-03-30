@@ -31,13 +31,12 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #define AT_MAX_CMD_LEN	4096
 
 #define UART_RX_BUF_NUM         2
-#define UART_RX_LEN             256
 #define UART_RX_TIMEOUT_MS      1
 #define UART_ERROR_DELAY_MS     500
 #define UART_RX_MARGIN_MS       10
 
 #define DATAMODE_SIZE_LIMIT_MAX	1024	/* byte */
-#define DATAMODE_TIME_LIMIT_MAX	10000	/* msec */
+#define DATAMODE_TIME_LIMIT_MAX	100	/* msec */
 
 /** @brief Termination Modes. */
 enum term_modes {
@@ -61,8 +60,9 @@ static struct k_work raw_send_work;
 static struct k_work cmd_send_work;
 static struct k_delayed_work uart_recovery_work;
 static bool uart_recovery_pending;
+static bool uart_send_pending;
 
-static uint8_t uart_rx_buf[UART_RX_BUF_NUM][UART_RX_LEN];
+static uint8_t uart_rx_buf[UART_RX_BUF_NUM][DATAMODE_SIZE_LIMIT_MAX];
 static uint8_t *next_buf = uart_rx_buf[1];
 static uint8_t *uart_tx_buf;
 
@@ -117,6 +117,7 @@ int enter_datamode(slm_datamode_handler_t handler)
 
 	datamode_handler = handler;
 	datamode_active = true;
+	uart_send_pending = false;
 	LOG_INF("Enter datamode");
 
 	return 0;
@@ -242,31 +243,12 @@ int get_uart_baudrate(void)
 
 bool verify_datamode_control(uint16_t size_limit, uint16_t time_limit)
 {
-	if (size_limit > DATAMODE_SIZE_LIMIT_MAX || time_limit > DATAMODE_TIME_LIMIT_MAX) {
-		return false;
+	if (time_limit < DATAMODE_TIME_LIMIT_MAX &&
+		    size_limit < DATAMODE_SIZE_LIMIT_MAX) {
+		return true;
 	}
 
-	if (size_limit > 0  && time_limit > 0) {
-		int baudrate;
-		int min_time;
-
-		baudrate = get_uart_baudrate();
-		if (baudrate <= 0) {
-			return false;
-		}
-
-		if (size_limit >= UART_RX_LEN) {
-			min_time = UART_RX_LEN * (8 + 1 + 1) * 1000 / baudrate + UART_RX_MARGIN_MS;
-		} else {
-			min_time = size_limit * (8 + 1 + 1) * 1000 / baudrate + UART_RX_MARGIN_MS;
-		}
-		if (min_time > time_limit) {
-			LOG_ERR("Invalid time_limit: %d, min: %d", time_limit, min_time);
-			return false;
-		}
-	}
-
-	return true;
+	return false;
 }
 
 static void response_handler(void *context, const char *response)
@@ -318,6 +300,7 @@ static void raw_send(struct k_work *work)
 	}
 	rx_start = k_uptime_get();
 	at_buf_len = 0;
+	uart_send_pending = false;
 }
 
 static void inactivity_timer_handler(struct k_timer *timer)
@@ -328,6 +311,7 @@ static void inactivity_timer_handler(struct k_timer *timer)
 
 	if (at_buf_len > 0) {
 		uart_rx_disable(uart_dev);
+		uart_send_pending = true;
 		k_work_submit(&raw_send_work);
 	}
 }
@@ -363,6 +347,11 @@ static int raw_rx_handler(const uint8_t *data, int datalen)
 	const char *quit_str = CONFIG_SLM_DATAMODE_TERMINATOR;
 	int quit_str_len = strlen(quit_str);
 	int64_t silence = CONFIG_SLM_DATAMODE_SILENCE * MSEC_PER_SEC;
+
+	if (uart_send_pending) {
+		LOG_WRN("raw data dropped, size: %d", datalen);
+		return -1;
+	}
 
 	/* First, check conditions for quitting datamode */
 	if (silence > k_uptime_delta(&rx_start)) {
@@ -413,6 +402,7 @@ static int raw_rx_handler(const uint8_t *data, int datalen)
 
 transit:
 	uart_rx_disable(uart_dev);
+	uart_send_pending = true;
 	k_work_submit(&raw_send_work);
 
 	return 0;
