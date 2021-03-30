@@ -104,6 +104,22 @@ static void modem_power_off(void)
 	k_sleep(K_SECONDS(1));
 }
 
+#if defined(CONFIG_SLM_STATS)
+/**@brief handle AT+CFUN commands
+ */
+static int handle_at_cfun(enum at_cmd_type type)
+{
+	int ret = -ENOENT, err = 0;
+
+	err = slm_stats_subscribe();
+	if (err != 0) {
+		LOG_ERR("Fail to subscribe stats");
+	}
+
+	return ret;
+}
+#endif
+
 /**@brief handle AT#XSLMVER commands
  *  #XSLMVER
  *  AT#XSLMVER? not supported
@@ -466,6 +482,10 @@ static struct slm_at_cmd {
 	{"AT#XGPIOC", handle_at_gpio_configure},
 	{"AT#XGPIO", handle_at_gpio_operate},
 #endif
+
+#if defined(CONFIG_SLM_STATS)
+	{"AT+CFUN", handle_at_cfun},
+#endif
 };
 
 int handle_at_clac(enum at_cmd_type cmd_type)
@@ -476,6 +496,10 @@ int handle_at_clac(enum at_cmd_type cmd_type)
 		int total = ARRAY_SIZE(slm_at_cmd_list);
 
 		for (int i = 0; i < total; i++) {
+			/* Skip non-SLM commands */
+			if (strncmp(slm_at_cmd_list[i].string, "AT#X", 4) != 0) {
+				continue;
+			}
 			sprintf(rsp_buf, "%s\r\n", slm_at_cmd_list[i].string);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
