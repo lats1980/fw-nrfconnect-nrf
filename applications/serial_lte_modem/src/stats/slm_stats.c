@@ -374,6 +374,33 @@ static int do_stats_stop(void)
 	return 0;
 }
 
+int slm_stats_subscribe(void)
+{
+
+	int bytes_sent = 0;
+	int err = 0;
+
+	if (stats.fd == INVALID_SOCKET) {
+		LOG_ERR("Not able to subscribe stats");
+		return -EINVAL;
+	}
+
+	LOG_DBG("Subscribe stats");
+	bytes_sent = send(stats.fd, AT_CMD_CEREG_5,
+				strlen(AT_CMD_CEREG_5), 0);
+	if (bytes_sent != strlen(AT_CMD_CEREG_5)) {
+		err = -errno;
+	}
+
+	bytes_sent = send(stats.fd, AT_CMD_CESQ_ON,
+				strlen(AT_CMD_CESQ_ON), 0);
+	if (bytes_sent != strlen(AT_CMD_CESQ_ON)) {
+		err = -errno;
+	}
+
+	return err;
+}
+
 static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 {
 	int err;

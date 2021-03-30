@@ -10,6 +10,7 @@
 #include <drivers/gpio.h>
 #include "slm_util.h"
 #include "slm_at_gpio.h"
+#include "slm_stats.h"
 
 LOG_MODULE_REGISTER(slm_gpio, CONFIG_SLM_LOG_LEVEL);
 
@@ -19,16 +20,21 @@ LOG_MODULE_REGISTER(slm_gpio, CONFIG_SLM_LOG_LEVEL);
 #define SLM_GPIO_FN_OUT		1	/* Enables pin as output. */
 #define SLM_GPIO_FN_IN_PU	21	/* Enables pin as input. Use internal pull up resistor. */
 #define SLM_GPIO_FN_IN_PD	22	/* Enables pin as input. Use internal pull down resistor. */
+#define SLM_GPIO_FN_DTR		310	/* Enables pin as DTR pin */
 
 /* global functions defined in different resources */
 void rsp_send(const uint8_t *str, size_t len);
+int poweron_uart(void);
+int poweroff_uart(void);
 
 /* global variable defined in different resources */
 extern struct at_param_list at_param_list;
 extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
 
 static const struct device *gpio_dev;
+static struct gpio_callback gpio_cb;
 static sys_slist_t slm_gpios = SYS_SLIST_STATIC_INIT(&slm_gpios);
+static struct k_work gpio_work;
 
 /**@brief GPIO operations. */
 enum slm_gpio_operations {
@@ -60,6 +66,9 @@ gpio_flags_t convert_flags(uint16_t fn)
 	case SLM_GPIO_FN_IN_PD:
 		gpio_flags = GPIO_INPUT | GPIO_PULL_DOWN;
 		break;
+	case SLM_GPIO_FN_DTR:
+		gpio_flags = GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_EDGE_BOTH;
+		break;
 	default:
 		LOG_ERR("Fail to convert gpio flag");
 		break;
@@ -68,11 +77,31 @@ gpio_flags_t convert_flags(uint16_t fn)
 	return gpio_flags;
 }
 
+static void gpio_cb_handler(const struct device *gpio_dev, struct gpio_callback *cb, uint32_t pins)
+{
+	struct slm_gpio_pin_t *cur = NULL, *next = NULL;
+
+	LOG_DBG("gpio callback handler on pins: %d", pins);
+	/* Trace gpio list */
+	if (sys_slist_peek_head(&slm_gpios) != NULL) {
+		SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&slm_gpios, cur,
+					     next, node) {
+			if (BIT(cur->pin) & pins) {
+				if (cur->fn == SLM_GPIO_FN_DTR) {
+					LOG_DBG("Find pin: %d as DTR pin", cur->pin);
+					k_work_submit(&gpio_work);
+				}
+			}
+		}
+	}
+}
+
 int do_gpio_pin_configure_set(gpio_pin_t pin, uint16_t fn)
 {
 	int err = 0;
 	gpio_flags_t gpio_flags = 0;
 	struct slm_gpio_pin_t *slm_gpio_pin = NULL, *cur = NULL, *next = NULL;
+	gpio_port_pins_t pin_mask = 0;
 
 	LOG_DBG("pin:%hu fn:%hu", pin, fn);
 
@@ -96,6 +125,9 @@ int do_gpio_pin_configure_set(gpio_pin_t pin, uint16_t fn)
 			if (cur->pin == pin) {
 				slm_gpio_pin = cur;
 			}
+			if (fn == SLM_GPIO_FN_DTR) {
+				pin_mask |= BIT(cur->pin);
+			}
 		}
 	}
 
@@ -118,6 +150,24 @@ int do_gpio_pin_configure_set(gpio_pin_t pin, uint16_t fn)
 
 	slm_gpio_pin->pin = pin;
 	slm_gpio_pin->fn = fn;
+
+	/* Configure GPIO callback for functional GPIO */
+	if (fn == SLM_GPIO_FN_DTR) {
+		/* Verify pin state and add callback */
+		k_work_submit(&gpio_work);
+		/* Add gpio callback */
+		pin_mask |= BIT(pin);
+		gpio_init_callback(&gpio_cb, gpio_cb_handler, pin_mask);
+		err = gpio_add_callback(gpio_dev, &gpio_cb);
+		if (err) {
+			LOG_ERR("Cannot configure cb (pin:%hu)", pin);
+			//TODO: free and remove node
+		}
+	} else if (fn == SLM_GPIO_FN_DISABLE) {
+		/* Remove callback */
+		pin_mask &= ~BIT(pin);
+		gpio_init_callback(&gpio_cb, gpio_cb_handler, pin_mask);
+	}
 
 	return err;
 }
@@ -289,6 +339,36 @@ int handle_at_gpio_operate(enum at_cmd_type cmd_type)
 	return err;
 }
 
+static void gpio_work_handle(struct k_work *work)
+{
+	int ret = 0;
+	struct slm_gpio_pin_t *cur = NULL, *next = NULL;
+
+	/* Trace gpio list */
+	if (sys_slist_peek_head(&slm_gpios) != NULL) {
+		SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&slm_gpios, cur,
+					     next, node) {
+			if (cur->fn == SLM_GPIO_FN_DTR) {
+				ret = gpio_pin_get(gpio_dev, cur->pin);
+				if (ret < 0) {
+					LOG_ERR("Cannot read gpio high");
+					return;
+				}
+				if (ret == 0) {
+					/* Enable UART if DTR is low state */
+					ret = poweron_uart();
+				} else {
+					/* Enable UART if DTR is high state */
+					ret = poweroff_uart();
+				}
+				if (ret) {
+					LOG_ERR("Failed to wake up uart: %d", ret);
+				}
+			}
+		}
+	}
+}
+
 int slm_at_gpio_init(void)
 {
 	int err = 0;
@@ -298,6 +378,8 @@ int slm_at_gpio_init(void)
 		LOG_ERR("GPIO_0 bind error");
 		err = -EIO;
 	}
+
+	k_work_init(&gpio_work, gpio_work_handle);
 
 	return err;
 }
