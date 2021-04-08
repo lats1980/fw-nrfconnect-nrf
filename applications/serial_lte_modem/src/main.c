@@ -61,11 +61,23 @@ static void exit_idle(struct k_work *work)
 	int err;
 
 	LOG_INF("Exit idle, full mode: %d", full_idle_mode);
-	gpio_pin_interrupt_configure(gpio_dev, CONFIG_SLM_INTERFACE_PIN,
+	err = gpio_pin_interrupt_configure(gpio_dev, CONFIG_SLM_INTERFACE_PIN,
 				     GPIO_INT_DISABLE);
-	gpio_remove_callback(gpio_dev, &gpio_cb);
+	if (err) {
+		LOG_ERR("Interface pin interrupt config error: %d", err);
+		return;
+	}
+	err = gpio_remove_callback(gpio_dev, &gpio_cb);
+	if (err) {
+		LOG_ERR("Interface pin remove callback error: %d", err);
+		return;
+	}
 	/* Do the same as nrf_gpio_cfg_default() */
-	gpio_pin_configure(gpio_dev, CONFIG_SLM_INTERFACE_PIN, GPIO_INPUT);
+	err = gpio_pin_configure(gpio_dev, CONFIG_SLM_INTERFACE_PIN, GPIO_INPUT);
+	if (err) {
+		LOG_ERR("Interface pin config error: %d", err);
+		return;
+	}
 
 	if (full_idle_mode) {
 		/* Restart SLM services */
@@ -113,7 +125,7 @@ void enter_idle(bool full_idle)
 	err = gpio_pin_interrupt_configure(gpio_dev, CONFIG_SLM_INTERFACE_PIN,
 					   GPIO_INT_LEVEL_LOW);
 	if (err) {
-		LOG_ERR("GPIO_0 enable callback error: %d", err);
+		LOG_ERR("Interface pin enable callback error: %d", err);
 		return;
 	}
 

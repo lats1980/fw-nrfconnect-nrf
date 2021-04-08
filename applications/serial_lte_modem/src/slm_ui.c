@@ -118,7 +118,7 @@ int slm_ui_init(void)
 	ui_gpio_dev = device_get_binding(DT_LABEL(DT_NODELABEL(gpio0)));
 	if (ui_gpio_dev == NULL) {
 		LOG_ERR("GPIO_0 for UI bind error");
-		err = -EINVAL;
+		return -EINVAL;
 	}
 	err = gpio_pin_configure(ui_gpio_dev, CONFIG_SLM_RI_PIN,
 				GPIO_OUTPUT);

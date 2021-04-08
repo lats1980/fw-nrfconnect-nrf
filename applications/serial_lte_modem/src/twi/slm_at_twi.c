@@ -112,6 +112,7 @@ static int do_twi_read(uint16_t index, uint16_t dev_addr, uint8_t num_read)
 		return ret;
 	}
 
+	memset(twi_data, 0, num_read);
 	ret = slm_util_htoa(twi_data, num_read, twi_data_ascii, num_read*2);
 	if (ret > 0) {
 		sprintf(rsp_buf, "\r\n#XTWIR: %d\r\n", ret);
