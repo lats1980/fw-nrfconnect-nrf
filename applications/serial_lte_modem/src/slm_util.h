@@ -25,6 +25,22 @@
 
 #define TCPIP_MAX_URL	128
 #define TCPIP_MAX_HOST_NAME_LEN 255
+
+/* Merged Protocol numbers of SLM */
+enum slm_ip_protocol {
+	SLM_IPPROTO_IP = 0,            /**< IP protocol (pseudo-val for setsockopt() */
+	SLM_IPPROTO_ICMP = 1,          /**< ICMP protocol   */
+	SLM_IPPROTO_TCP = 6,           /**< TCP protocol    */
+	SLM_IPPROTO_UDP = 17,          /**< UDP protocol    */
+	SLM_IPPROTO_IPV6 = 41,         /**< IPv6 protocol   */
+	SLM_IPPROTO_ICMPV6 = 58,       /**< ICMPv6 protocol */
+	SLM_IPPROTO_RAW = 255,         /**< RAW IP packets  */
+	SLM_IPPROTO_TLS_1_0 = 256,     /**< TLS 1.0 protocol */
+	SLM_IPPROTO_TLS_1_1 = 257,     /**< TLS 1.1 protocol */
+	SLM_IPPROTO_TLS_1_2 = 258,     /**< TLS 1.2 protocol */
+	SLM_IPPROTO_DTLS_1_0 = 272,    /**< DTLS 1.0 protocol */
+	SLM_IPPROTO_DTLS_1_2 = 273,    /**< DTLS 1.2 protocol */
+};
 /**
  * @brief Compare string ignoring case
  *

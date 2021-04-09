@@ -122,10 +122,10 @@ static int resolve_and_connect(int family, const char *host, int sec_tag)
 	/* Set up port and protocol */
 	if (httpc.sec_transport == false) {
 		/* HTTP, port 80 */
-		proto = IPPROTO_TCP;
+		proto = SLM_IPPROTO_TCP;
 	} else {
 		/* HTTPS, port 443 */
-		proto = IPPROTO_TLS_1_2;
+		proto = SLM_IPPROTO_TLS_1_2;
 	}
 
 	port = htons(httpc.port);
@@ -152,7 +152,7 @@ static int resolve_and_connect(int family, const char *host, int sec_tag)
 		goto cleanup;
 	}
 
-	if (proto == IPPROTO_TLS_1_2) {
+	if (proto == SLM_IPPROTO_TLS_1_2) {
 		LOG_INF("Setting up TLS credentials");
 		err = socket_sectag_set(fd, sec_tag);
 		if (err) {

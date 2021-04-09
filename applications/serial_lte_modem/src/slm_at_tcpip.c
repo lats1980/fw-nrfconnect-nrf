@@ -132,22 +132,22 @@ static int do_socket_open(uint8_t type, uint8_t role, int sec_tag)
 	if (type == SOCK_STREAM) {
 		if (sec_tag == INVALID_SEC_TAG) {
 			client.sock = socket(AF_INET, SOCK_STREAM,
-					IPPROTO_TCP);
-			client.ip_proto = IPPROTO_TCP;
+					SLM_IPPROTO_TCP);
+			client.ip_proto = SLM_IPPROTO_TCP;
 		} else {
 			client.sock = socket(AF_INET, SOCK_STREAM,
-					IPPROTO_TLS_1_2);
-			client.ip_proto = IPPROTO_TLS_1_2;
+					SLM_IPPROTO_TLS_1_2);
+			client.ip_proto = SLM_IPPROTO_TLS_1_2;
 		}
 	} else if (type == SOCK_DGRAM) {
 		if (sec_tag == INVALID_SEC_TAG) {
 			client.sock = socket(AF_INET, SOCK_DGRAM,
-					IPPROTO_UDP);
-			client.ip_proto = IPPROTO_UDP;
+					SLM_IPPROTO_UDP);
+			client.ip_proto = SLM_IPPROTO_UDP;
 		} else {
 			client.sock = socket(AF_INET, SOCK_DGRAM,
-					IPPROTO_DTLS_1_2);
-			client.ip_proto = IPPROTO_DTLS_1_2;
+					SLM_IPPROTO_DTLS_1_2);
+			client.ip_proto = SLM_IPPROTO_DTLS_1_2;
 		}
 	} else {
 		LOG_ERR("socket type %d not supported", type);
@@ -935,8 +935,8 @@ int handle_at_listen(enum at_cmd_type cmd_type)
 		LOG_ERR("Invalid role");
 		return err;
 	}
-	if (client.ip_proto != IPPROTO_TCP &&
-		client.ip_proto != IPPROTO_TLS_1_2) {
+	if (client.ip_proto != SLM_IPPROTO_TCP &&
+		client.ip_proto != SLM_IPPROTO_TLS_1_2) {
 		LOG_ERR("Invalid protocol");
 		return err;
 	}
@@ -970,8 +970,8 @@ int handle_at_accept(enum at_cmd_type cmd_type)
 		LOG_ERR("Invalid role");
 		return err;
 	}
-	if (client.ip_proto != IPPROTO_TCP &&
-		client.ip_proto != IPPROTO_TLS_1_2) {
+	if (client.ip_proto != SLM_IPPROTO_TCP &&
+		client.ip_proto != SLM_IPPROTO_TLS_1_2) {
 		LOG_ERR("Invalid protocol");
 		return err;
 	}
@@ -1094,8 +1094,8 @@ int handle_at_sendto(enum at_cmd_type cmd_type)
 		LOG_ERR("Socket not opened yet");
 		return err;
 	}
-	if (client.ip_proto != IPPROTO_UDP &&
-		client.ip_proto != IPPROTO_DTLS_1_2) {
+	if (client.ip_proto != SLM_IPPROTO_UDP &&
+		client.ip_proto != SLM_IPPROTO_DTLS_1_2) {
 		LOG_ERR("Invalid protocol");
 		return err;
 	}
@@ -1156,8 +1156,8 @@ int handle_at_recvfrom(enum at_cmd_type cmd_type)
 		LOG_ERR("Socket not opened yet");
 		return err;
 	}
-	if (client.ip_proto != IPPROTO_UDP &&
-		client.ip_proto != IPPROTO_DTLS_1_2) {
+	if (client.ip_proto != SLM_IPPROTO_UDP &&
+		client.ip_proto != SLM_IPPROTO_DTLS_1_2) {
 		LOG_ERR("Invalid protocol");
 		return err;
 	}
@@ -1240,7 +1240,7 @@ int slm_at_tcpip_init(void)
 	client.role = AT_SOCKET_ROLE_CLIENT;
 	client.sock_peer = INVALID_SOCKET;
 	client.connected = false;
-	client.ip_proto = IPPROTO_IP;
+	client.ip_proto = SLM_IPPROTO_IP;
 	return 0;
 }
 
