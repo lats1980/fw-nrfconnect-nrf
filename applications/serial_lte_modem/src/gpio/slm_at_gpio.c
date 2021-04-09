@@ -67,7 +67,7 @@ gpio_flags_t convert_flags(uint16_t fn)
 		gpio_flags = GPIO_INPUT | GPIO_PULL_DOWN;
 		break;
 	case SLM_GPIO_FN_DTR:
-		gpio_flags = GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_EDGE_BOTH;
+		gpio_flags = GPIO_INPUT | GPIO_PULL_UP;
 		break;
 	default:
 		LOG_ERR("Fail to convert gpio flag");
@@ -80,8 +80,9 @@ gpio_flags_t convert_flags(uint16_t fn)
 static void gpio_cb_handler(const struct device *gpio_dev, struct gpio_callback *cb, uint32_t pins)
 {
 	struct slm_gpio_pin_t *cur = NULL, *next = NULL;
+	int err = 0;
 
-	LOG_DBG("gpio callback handler on pins: %d", pins);
+	LOG_INF("gpio callback handler on pins: %d", pins);
 	/* Trace gpio list */
 	if (sys_slist_peek_head(&slm_gpios) != NULL) {
 		SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&slm_gpios, cur,
@@ -89,6 +90,12 @@ static void gpio_cb_handler(const struct device *gpio_dev, struct gpio_callback 
 			if (BIT(cur->pin) & pins) {
 				if (cur->fn == SLM_GPIO_FN_DTR) {
 					LOG_DBG("Find pin: %d as DTR pin", cur->pin);
+					err = gpio_pin_interrupt_configure(gpio_dev, cur->pin,
+								GPIO_INT_DISABLE);
+					if (err) {
+						LOG_ERR("Fail to disable interrupt on pin: %d",
+							cur->pin);
+					}
 					k_work_submit(&gpio_work);
 				}
 			}
@@ -153,8 +160,6 @@ int do_gpio_pin_configure_set(gpio_pin_t pin, uint16_t fn)
 
 	/* Configure GPIO callback for functional GPIO */
 	if (fn == SLM_GPIO_FN_DTR) {
-		/* Verify pin state and add callback */
-		k_work_submit(&gpio_work);
 		/* Add gpio callback */
 		pin_mask |= BIT(pin);
 		gpio_init_callback(&gpio_cb, gpio_cb_handler, pin_mask);
@@ -163,7 +168,15 @@ int do_gpio_pin_configure_set(gpio_pin_t pin, uint16_t fn)
 			LOG_ERR("Cannot configure cb (pin:%hu)", pin);
 			//TODO: free and remove node
 		}
+		/* Verify pin state and configure interrupt */
+		k_work_submit(&gpio_work);
 	} else if (fn == SLM_GPIO_FN_DISABLE) {
+		/* Disable interrupt */
+		err = gpio_pin_interrupt_configure(gpio_dev, pin, GPIO_INT_DISABLE);
+		if (err) {
+			LOG_ERR("Interface pin interrupt config error: %d", err);
+			return err;
+		}
 		/* Remove callback */
 		pin_mask &= ~BIT(pin);
 		gpio_init_callback(&gpio_cb, gpio_cb_handler, pin_mask);
@@ -349,6 +362,8 @@ static void gpio_work_handle(struct k_work *work)
 		SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&slm_gpios, cur,
 					     next, node) {
 			if (cur->fn == SLM_GPIO_FN_DTR) {
+				uint32_t int_conf = GPIO_INT_DISABLE;
+
 				ret = gpio_pin_get(gpio_dev, cur->pin);
 				if (ret < 0) {
 					LOG_ERR("Cannot read gpio high");
@@ -357,12 +372,20 @@ static void gpio_work_handle(struct k_work *work)
 				if (ret == 0) {
 					/* Enable UART if DTR is low state */
 					ret = poweron_uart();
+					int_conf = GPIO_INT_LEVEL_HIGH;
 				} else {
 					/* Enable UART if DTR is high state */
 					ret = poweroff_uart();
+					int_conf = GPIO_INT_LEVEL_LOW;
 				}
 				if (ret) {
 					LOG_ERR("Failed to wake up uart: %d", ret);
+				}
+				ret = gpio_pin_interrupt_configure(gpio_dev, cur->pin,
+								int_conf);
+				if (ret) {
+					LOG_ERR("Fail to set interrupt. pin: %d, %d",
+						cur->pin, ret);
 				}
 			}
 		}
