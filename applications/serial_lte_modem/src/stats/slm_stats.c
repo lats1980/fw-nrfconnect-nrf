@@ -20,9 +20,10 @@
 
 LOG_MODULE_REGISTER(stats, CONFIG_SLM_LOG_LEVEL);
 
-#define THREAD_STACK_SIZE       KB(1)
-#define THREAD_PRIORITY	 K_LOWEST_APPLICATION_THREAD_PRIO
-static K_THREAD_STACK_DEFINE(stats_thread_stack, THREAD_STACK_SIZE);
+static struct k_thread stats_thread;
+#define STATS_THREAD_STACK_SIZE       KB(1)
+#define STATS_THREAD_PRIORITY	 K_LOWEST_APPLICATION_THREAD_PRIO
+static K_THREAD_STACK_DEFINE(stats_thread_stack, STATS_THREAD_STACK_SIZE);
 
 #define SLM_STATS_MAX_READ_LENGTH		128
 
@@ -52,9 +53,6 @@ static struct slm_stats_ctx {
 static struct pollfd fds = {
 	.fd = INVALID_SOCKET,
 };
-
-/* Connected flag */
-static K_SEM_DEFINE(stats_inited, 0, 1);
 
 enum lte_lc_notif_type {
 	LTE_LC_NOTIF_CEREG,
@@ -325,6 +323,132 @@ static int subscribe_stats(void)
 	return 0;
 }
 
+static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
+{
+	int err;
+	int bytes_read;
+	static char buf[SLM_STATS_MAX_READ_LENGTH];
+	enum lte_lc_notif_type notif_type;
+
+	ARG_UNUSED(arg1);
+	ARG_UNUSED(arg2);
+	ARG_UNUSED(arg3);
+
+	while (stats.fd != INVALID_SOCKET) {
+		err = poll(&fds, 1, -1);
+		if (err < 0) {
+			LOG_ERR("ERROR: poll %d", errno);
+			break;
+		}
+		if ((fds.revents & POLLIN) == POLLIN) {
+			bytes_read = recv(stats.fd, buf, sizeof(buf), 0);
+
+			/* Handle possible socket-level errors */
+			if (bytes_read < 0) {
+				LOG_ERR("Unrecoverable reception error (err: %d), "
+					"thread killed", errno);
+				if (stats.fd != INVALID_SOCKET) {
+					close(stats.fd);
+				}
+				stats.fd = INVALID_SOCKET;
+			} else if (bytes_read == 0) {
+				LOG_ERR("AT message empty");
+			} else if (buf[bytes_read - 1] != '\0') {
+				LOG_ERR("AT message too large for reception buffer or "
+					"missing termination character");
+			}
+
+			LOG_DBG("at_cmd_rx %d bytes, %s", bytes_read, log_strdup(buf));
+			/* Only proceed with parsing if notification is relevant */
+			if (!is_relevant_notif(buf, &notif_type)) {
+				LOG_DBG("Notification without interests: %s",
+					log_strdup(buf));
+				continue;
+			}
+
+			switch (notif_type) {
+			case LTE_LC_NOTIF_CEREG: {
+				struct lte_lc_cell cell;
+				struct lte_lc_psm_cfg psm_cfg;
+
+				err = parse_cereg(buf, &stats.reg_status,
+						&cell, &psm_cfg);
+				if (err) {
+					LOG_ERR("Failed to parse notification"
+						" (error %d): %s",
+						err, log_strdup(buf));
+				}
+				LOG_DBG("reg_status: %hu", stats.reg_status);
+
+				if (stats.reg_status == LTE_LC_NW_REG_UICC_FAIL) {
+					LOG_ERR("Network registration fail: UICC");
+	#if defined(CONFIG_SLM_DIAG)
+					slm_diag_set_event(SLM_DIAG_UICC_FAIL);
+	#endif
+				} else if (stats.reg_status == LTE_LC_NW_REG_SEARCHING) {
+					LOG_DBG("Network registration status: Connecting");
+					ui_led_set_state(LED_ID_LTE, UI_LTE_CONNECTING);
+				} else if ((stats.reg_status == LTE_LC_NW_REG_REGISTERED_HOME) ||
+					(stats.reg_status == LTE_LC_NW_REG_REGISTERED_ROAMING)) {
+					LOG_DBG("Network registration status: %s",
+					stats.reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
+					"Connected - home network" : "Connected - roaming");
+					ui_led_set_state(LED_ID_LTE, UI_LTE_CONNECTED);
+	#if defined(CONFIG_SLM_DIAG)
+					slm_diag_clear_event(SLM_DIAG_UICC_FAIL);
+	#endif
+				} else if ((stats.reg_status == LTE_LC_NW_REG_NOT_REGISTERED) ||
+					(stats.reg_status == LTE_LC_NW_REG_UNKNOWN)) {
+					ui_led_set_state(LED_ID_LTE, UI_LTE_DISCONNECTED);
+				}
+				break;
+			}
+			case LTE_LC_NOTIF_CESQ: {
+				/* The format of %CESQ info:
+				 * %CESQ: <rsrp>,...
+				 */
+				stats.rsrp = atoi(buf + strlen("%CESQ: "));
+
+				LOG_DBG("rsrp: %hu", stats.rsrp);
+
+				/* Only send a value from a valid range (0 - 97). */
+				if (stats.rsrp > 97) {
+					ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_OFF);
+					break;
+				}
+
+				if (stats.rsrp < RSRP_THRESHOLD_1) {
+					ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L0);
+				} else if (stats.rsrp >= RSRP_THRESHOLD_1 &&
+					   stats.rsrp < RSRP_THRESHOLD_2) {
+					ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L1);
+				} else if (stats.rsrp >= RSRP_THRESHOLD_2 &&
+					   stats.rsrp < RSRP_THRESHOLD_3) {
+					ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L2);
+				} else if (stats.rsrp >= RSRP_THRESHOLD_3 &&
+					   stats.rsrp < RSRP_THRESHOLD_4) {
+					ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L3);
+				} else {
+					ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L4);
+				}
+				break;
+			}
+			default:
+				LOG_ERR("Unrecognized notification type: %d",
+					notif_type);
+				break;
+			}
+		}
+		if ((fds.revents & POLLERR) == POLLERR) {
+			LOG_ERR("POLLERR");
+		}
+		if ((fds.revents & POLLNVAL) == POLLNVAL) {
+			LOG_ERR("POLLNVAL");
+		}
+	}
+	LOG_DBG("Exit STATS thread");
+}
+
 static int do_stats_start(void)
 {
 	int err = 0;
@@ -347,7 +471,11 @@ static int do_stats_start(void)
 		if (err != 0) {
 			LOG_ERR("Fail to subscribe stats");
 		}
-		k_sem_give(&stats_inited);
+		/* start stats thread */
+		k_thread_create(&stats_thread, stats_thread_stack,
+				K_THREAD_STACK_SIZEOF(stats_thread_stack),
+				stats_thread_fn, NULL, NULL, NULL,
+				STATS_THREAD_PRIORITY, K_USER, K_NO_WAIT);
 	} else {
 		LOG_ERR("Stats socket was already opened.");
 		return -EINVAL;
@@ -401,132 +529,6 @@ int slm_stats_subscribe(void)
 	return err;
 }
 
-static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
-{
-	int err;
-	int bytes_read;
-	static char buf[SLM_STATS_MAX_READ_LENGTH];
-	enum lte_lc_notif_type notif_type;
-
-	ARG_UNUSED(arg1);
-	ARG_UNUSED(arg2);
-	ARG_UNUSED(arg3);
-
-	while (1) {
-		/* Don't go any further until MQTT is connected */
-		k_sem_take(&stats_inited, K_FOREVER);
-		while (stats.fd != INVALID_SOCKET) {
-			err = poll(&fds, 1, -1);
-			if (err < 0) {
-				LOG_ERR("ERROR: poll %d", errno);
-				break;
-			}
-			if ((fds.revents & POLLIN) == POLLIN) {
-				bytes_read = recv(stats.fd, buf, sizeof(buf), 0);
-
-				/* Handle possible socket-level errors */
-				if (bytes_read < 0) {
-					LOG_ERR("Unrecoverable reception error (err: %d), "
-						"thread killed", errno);
-					if (stats.fd != INVALID_SOCKET) {
-						close(stats.fd);
-					}
-					stats.fd = INVALID_SOCKET;
-				} else if (bytes_read == 0) {
-					LOG_ERR("AT message empty");
-				} else if (buf[bytes_read - 1] != '\0') {
-					LOG_ERR("AT message too large for reception buffer or "
-						"missing termination character");
-				}
-
-				LOG_DBG("at_cmd_rx %d bytes, %s", bytes_read, log_strdup(buf));
-				/* Only proceed with parsing if notification is relevant */
-				if (!is_relevant_notif(buf, &notif_type)) {
-					LOG_DBG("Notification without interests: %s",
-						log_strdup(buf));
-					continue;
-				}
-
-				switch (notif_type) {
-				case LTE_LC_NOTIF_CEREG: {
-					struct lte_lc_cell cell;
-					struct lte_lc_psm_cfg psm_cfg;
-
-					err = parse_cereg(buf, &stats.reg_status,
-							&cell, &psm_cfg);
-					if (err) {
-						LOG_ERR("Failed to parse notification"
-							" (error %d): %s",
-							err, log_strdup(buf));
-					}
-					LOG_DBG("reg_status: %hu", stats.reg_status);
-
-					if (stats.reg_status == LTE_LC_NW_REG_UICC_FAIL) {
-						LOG_ERR("Network registration fail: UICC");
-		#if defined(CONFIG_SLM_DIAG)
-						slm_diag_set_event(SLM_DIAG_UICC_FAIL);
-		#endif
-					} else if (stats.reg_status == LTE_LC_NW_REG_SEARCHING) {
-						LOG_DBG("Network registration status: Connecting");
-						ui_led_set_state(LED_ID_LTE, UI_LTE_CONNECTING);
-					} else if ((stats.reg_status == LTE_LC_NW_REG_REGISTERED_HOME) ||
-						(stats.reg_status == LTE_LC_NW_REG_REGISTERED_ROAMING)) {
-						LOG_DBG("Network registration status: %s",
-						stats.reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
-						"Connected - home network" : "Connected - roaming");
-						ui_led_set_state(LED_ID_LTE, UI_LTE_CONNECTED);
-		#if defined(CONFIG_SLM_DIAG)
-						slm_diag_clear_event(SLM_DIAG_UICC_FAIL);
-		#endif
-					} else if ((stats.reg_status == LTE_LC_NW_REG_NOT_REGISTERED) ||
-						(stats.reg_status == LTE_LC_NW_REG_UNKNOWN)) {
-						ui_led_set_state(LED_ID_LTE, UI_LTE_DISCONNECTED);
-					}
-					break;
-				}
-				case LTE_LC_NOTIF_CESQ: {
-					/* The format of %CESQ info:
-					* %CESQ: <rsrp>,...
-					*/
-					stats.rsrp = atoi(buf + strlen("%CESQ: "));
-
-					LOG_DBG("rsrp: %hu", stats.rsrp);
-
-					/* Only send a value from a valid range (0 - 97). */
-					if (stats.rsrp > 97) {
-						ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_OFF);
-						break;
-					}
-
-					if (stats.rsrp < RSRP_THRESHOLD_1) {
-						ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L0);
-					} else if (stats.rsrp >= RSRP_THRESHOLD_1 && stats.rsrp < RSRP_THRESHOLD_2) {
-						ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L1);
-					} else if (stats.rsrp >= RSRP_THRESHOLD_2 && stats.rsrp < RSRP_THRESHOLD_3) {
-						ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L2);
-					} else if (stats.rsrp >= RSRP_THRESHOLD_3 && stats.rsrp < RSRP_THRESHOLD_4) {
-						ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L3);
-					} else {
-						ui_led_set_state(LED_ID_SIGNAL, UI_SIGNAL_L4);
-					}
-					break;
-				}
-				default:
-					LOG_ERR("Unrecognized notification type: %d",
-						notif_type);
-					break;
-				}
-			}
-			if ((fds.revents & POLLERR) == POLLERR) {
-				LOG_ERR("POLLERR");
-			}
-			if ((fds.revents & POLLNVAL) == POLLNVAL) {
-				LOG_ERR("POLLNVAL");
-			}
-		}
-	}
-}
-
 int slm_stats_init(void)
 {
 	int err;
@@ -551,7 +553,3 @@ int slm_stats_uninit(void)
 
 	return 0;
 }
-
-K_THREAD_DEFINE(stats_thread, K_THREAD_STACK_SIZEOF(stats_thread_stack),
-		stats_thread_fn, NULL, NULL, NULL,
-		THREAD_PRIORITY, 0, 0);
