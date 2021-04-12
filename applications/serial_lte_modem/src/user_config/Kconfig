@@ -1,0 +1,14 @@
+#
+# Copyright (c) 2021 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+
+config SLM_UC
+	bool "Settings support in SLM"
+	default y
+	select FLASH
+	select SETTINGS
+	select FCB
+	select MPU_ALLOW_FLASH_WRITE
+	select FLASH_PAGE_LAYOUT
+	select FLASH_MAP

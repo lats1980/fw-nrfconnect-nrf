@@ -33,5 +33,6 @@ add_subdirectory_ifdef(CONFIG_SLM_HTTPC src/http_c)
 add_subdirectory_ifdef(CONFIG_SLM_STATS src/stats)
 add_subdirectory_ifdef(CONFIG_SLM_TWI src/twi)
 add_subdirectory_ifdef(CONFIG_SLM_GPIO src/gpio)
+add_subdirectory_ifdef(CONFIG_SLM_UC src/user_config)
 
 zephyr_include_directories(src)
