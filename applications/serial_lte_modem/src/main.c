@@ -46,7 +46,7 @@ extern uint8_t fota_status;
 extern int32_t fota_info;
 
 /* global functions defined in different files */
-int poweron_uart(void);
+int poweron_uart(bool sync_str);
 int slm_settings_init(void);
 int slm_setting_fota_save(void);
 
@@ -87,7 +87,7 @@ static void exit_idle(struct k_work *work)
 		}
 	} else {
 		/* Power on UART only */
-		err = poweron_uart();
+		err = poweron_uart(true);
 		if (err) {
 			LOG_ERR("Failed to wake up uart: %d", err);
 		}

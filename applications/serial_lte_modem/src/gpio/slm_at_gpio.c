@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(slm_gpio, CONFIG_SLM_LOG_LEVEL);
 
 /* global functions defined in different resources */
 void rsp_send(const uint8_t *str, size_t len);
-int poweron_uart(void);
+int poweron_uart(bool sync_str);
 int poweroff_uart(void);
 
 /* global variable defined in different resources */
@@ -371,7 +371,7 @@ static void gpio_work_handle(struct k_work *work)
 				}
 				if (ret == 0) {
 					/* Enable UART if DTR is low state */
-					ret = poweron_uart();
+					ret = poweron_uart(false);
 					int_conf = GPIO_INT_LEVEL_HIGH;
 				} else {
 					/* Enable UART if DTR is high state */

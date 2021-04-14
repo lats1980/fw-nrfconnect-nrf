@@ -96,7 +96,7 @@ extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
 
 extern const struct device *ui_gpio_dev;
 
-extern int poweron_uart(void);
+extern int poweron_uart(bool sync_str);
 
 /** forward declaration of thread function **/
 static void tcpcli_thread_func(void *p1, void *p2, void *p3);
@@ -664,7 +664,7 @@ static int tcpsvr_input(int infd)
 		if (proxy.datamode) {
 			enter_datamode(tcp_datamode_callback);
 		}
-		err = poweron_uart();
+		err = poweron_uart(true);
 		if (err != 0) {
 			LOG_ERR("Fail to wake up UART");
 		}

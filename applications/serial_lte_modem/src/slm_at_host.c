@@ -174,7 +174,7 @@ int poweroff_uart(void)
 	return err;
 }
 
-int poweron_uart(void)
+int poweron_uart(bool sync_str)
 {
 	int err;
 	uint32_t current_state = 0;
@@ -191,7 +191,9 @@ int poweron_uart(void)
 		err = uart_receive();
 		if (err == 0) {
 			k_sem_give(&tx_done);
-			rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);
+			if (sync_str) {
+				rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);
+			}
 		}
 	}
 
