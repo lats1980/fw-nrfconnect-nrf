@@ -12,6 +12,9 @@
 #include "slm_util.h"
 #include "slm_at_host.h"
 #include "slm_at_udp_proxy.h"
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
 
 LOG_MODULE_REGISTER(udp_proxy, CONFIG_SLM_LOG_LEVEL);
 
@@ -284,6 +287,17 @@ static int do_udp_send(const uint8_t *data, int datalen)
 	if (ret >= 0) {
 		sprintf(rsp_buf, "\r\n#XUDPSEND: %d\r\n", offset);
 		rsp_send(rsp_buf, strlen(rsp_buf));
+#if defined(CONFIG_SLM_UI)
+		if (offset > 0) {
+			if (offset < NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (offset < 2*NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
+		}
+#endif
 		return 0;
 	} else {
 		return ret;
@@ -317,6 +331,18 @@ static int do_udp_send_datamode(const uint8_t *data, int datalen)
 		}
 		offset += ret;
 	}
+
+#if defined(CONFIG_SLM_UI)
+	if (offset > 0) {
+		if (offset < NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (offset < 2*NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
+	}
+#endif
 
 	return offset;
 }
@@ -369,6 +395,15 @@ static void udp_thread_func(void *p1, void *p2, void *p3)
 		if (ret == 0) {
 			continue;
 		}
+#if defined(CONFIG_SLM_UI)
+		if (ret < NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (ret < 2*NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
+#endif
 		if (udp_datamode) {
 			rsp_send(rx_data, ret);
 		} else if (slm_util_hex_check(rx_data, ret)) {

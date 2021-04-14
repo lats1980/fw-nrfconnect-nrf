@@ -433,6 +433,17 @@ static int do_tcp_send(const uint8_t *data, int datalen)
 			k_timer_start(&conn_timer, K_SECONDS(proxy.timeout),
 				      K_NO_WAIT);
 		}
+#if defined(CONFIG_SLM_UI)
+		if (offset > 0) {
+			if (offset < NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (offset < 2*NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
+		}
+#endif
 		return 0;
 	} else {
 		return ret;
