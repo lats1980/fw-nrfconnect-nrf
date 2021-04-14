@@ -81,7 +81,7 @@ static void led_update(struct led *led)
 void ui_led_set_state(enum led_id id, enum ui_led_state state)
 {
 	LOG_DBG("LED %d state change to: %d", id, state);
-	if (leds[id].state == state) {
+	if (leds[id].state == state && (state < UI_DATA_NONE || state > UI_DATA_FAST)) {
 		return;
 	}
 	leds[id].state = state;
