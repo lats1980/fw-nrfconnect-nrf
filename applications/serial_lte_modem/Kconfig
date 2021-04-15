@@ -29,6 +29,9 @@ config SLM_UI
 config SLM_DIAG
 	bool "Enable SLM diagnostic module"
 
+config SLM_UART_HWFC_RUNTIME
+	bool "Support of UART HWFC runtime configuration"
+
 #
 # external XTAL for UART
 #
@@ -49,10 +52,14 @@ choice
 	config SLM_CONNECT_UART_0
 		bool "UART 0"
 	  select UART_0_NRF_HW_ASYNC
+	  select SLM_UART_HWFC_RUNTIME if $(dt_node_has_prop,uart0,rts-pin) && \
+					  $(dt_node_has_prop,uart0,cts-pin)
 	config SLM_CONNECT_UART_2
 		bool "UART 2"
 	  select UART_2_NRF_UARTE
 	  select UART_2_NRF_HW_ASYNC
+	  select SLM_UART_HWFC_RUNTIME if $(dt_node_has_prop,uart2,rts-pin) && \
+					  $(dt_node_has_prop,uart2,cts-pin)
 endchoice
 
 choice

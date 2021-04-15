@@ -13,6 +13,7 @@
 #include <init.h>
 #include <modem/at_cmd.h>
 #include <modem/at_notif.h>
+#include <hal/nrf_uarte.h>
 
 LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 
@@ -205,18 +206,39 @@ bool check_uart_flowcontrol(void)
 	return (slm_uart.flow_ctrl == UART_CFG_FLOW_CTRL_RTS_CTS);
 }
 
-int set_uart_baudrate(uint32_t baudrate)
+int slm_uart_configure(uint32_t baudrate, uint8_t hwfc)
 {
 	int err;
 
 	LOG_DBG("Set uart baudrate to: %d", baudrate);
 
 	slm_uart.baudrate = baudrate;
+	slm_uart.flow_ctrl = hwfc;
 	err = uart_configure(uart_dev, &slm_uart);
 	if (err != 0) {
 		LOG_ERR("uart_configure: %d", err);
 	}
-
+#if defined(CONFIG_SLM_UART_HWFC_RUNTIME)
+	/* Workaround to set HWFC dynamically */
+#if defined(CONFIG_UART_0_NRF_HW_ASYNC_TIMER)
+	if (hwfc) {
+		nrf_uarte_hwfc_pins_set(NRF_UARTE0,
+					DT_PROP(DT_NODELABEL(uart0), rts_pin),
+					DT_PROP(DT_NODELABEL(uart0), cts_pin));
+	} else {
+		nrf_uarte_hwfc_pins_disconnect(NRF_UARTE0);
+	}
+#endif
+#if defined(CONFIG_UART_2_NRF_HW_ASYNC_TIMER)
+	if (hwfc) {
+		nrf_uarte_hwfc_pins_set(NRF_UARTE2,
+					DT_PROP(DT_NODELABEL(uart2), rts_pin),
+					DT_PROP(DT_NODELABEL(uart2), cts_pin));
+	} else {
+		nrf_uarte_hwfc_pins_disconnect(NRF_UARTE2);
+	}
+#endif
+#endif
 	return err;
 }
 
@@ -694,7 +716,7 @@ int slm_at_host_init(void)
 		LOG_INF("UART baud: %d d/p/s-bits: %d/%d/%d HWFC: %d",
 			slm_uart.baudrate, slm_uart.data_bits, slm_uart.parity,
 			slm_uart.stop_bits, slm_uart.flow_ctrl);
-		err = set_uart_baudrate(slm_uart.baudrate);
+		err = slm_uart_configure(slm_uart.baudrate, slm_uart.flow_ctrl);
 		if (err != 0) {
 			LOG_ERR("Fail to set uart baudrate: %d", err);
 			return err;
