@@ -170,6 +170,7 @@ rsource "src/stats/Kconfig"
 rsource "src/twi/Kconfig"
 rsource "src/gpio/Kconfig"
 rsource "src/user_config/Kconfig"
+rsource "src/hw_rev/Kconfig"
 
 module = SLM
 module-str = serial modem

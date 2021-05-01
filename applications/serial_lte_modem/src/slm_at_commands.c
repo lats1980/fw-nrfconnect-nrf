@@ -56,6 +56,9 @@
 #if defined(CONFIG_SLM_UC)
 #include "slm_at_uc.h"
 #endif
+#if defined(CONFIG_SLM_HW_REV)
+#include "slm_at_hw_rev.h"
+#endif
 
 LOG_MODULE_REGISTER(slm_at, CONFIG_SLM_LOG_LEVEL);
 
@@ -436,6 +439,10 @@ int handle_at_gpio_operate(enum at_cmd_type cmd_type);
 int handle_at_uc(enum at_cmd_type cmd_type);
 #endif
 
+#if defined(CONFIG_SLM_HW_REV)
+int handle_at_hw_rev(enum at_cmd_type cmd_type);
+#endif
+
 static struct slm_at_cmd {
 	char *string;
 	slm_at_handler_t handler;
@@ -521,6 +528,10 @@ static struct slm_at_cmd {
 
 #if defined(CONFIG_SLM_UC)
 	{"AT#XUC", handle_at_uc},
+#endif
+
+#if defined(CONFIG_SLM_HW_REV)
+	{"AT#XSLMHWREV", handle_at_hw_rev},
 #endif
 
 #if defined(CONFIG_SLM_STATS)
@@ -677,6 +688,13 @@ int slm_at_init(void)
 		return -EFAULT;
 	}
 #endif
+#if defined(CONFIG_SLM_HW_REV)
+	err = slm_at_hw_rev_init();
+	if (err) {
+		LOG_ERR("HW revision could not be initialized: %d", err);
+		return -EFAULT;
+	}
+#endif
 
 	return err;
 }
@@ -769,6 +787,12 @@ void slm_at_uninit(void)
 	err = slm_at_uc_uninit();
 	if (err) {
 		LOG_ERR("User Config could not be uninit: %d", err);
+	}
+#endif
+#if defined(CONFIG_SLM_HW_REV)
+	err = slm_at_hw_rev_uninit();
+	if (err) {
+		LOG_ERR("HW revision could not be uninit: %d", err);
 	}
 #endif
 }
