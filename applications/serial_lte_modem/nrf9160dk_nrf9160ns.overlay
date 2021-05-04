@@ -1,3 +1,10 @@
+&uart0 {
+	status = "okay";
+	current-speed = <115200>;
+	tx-pin = <29>;
+	rx-pin = <28>;
+};
+
 &uart2 {
 	compatible = "nordic,nrf-uarte";
 	current-speed = <115200>;

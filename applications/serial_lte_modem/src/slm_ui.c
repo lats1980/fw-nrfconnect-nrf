@@ -126,6 +126,12 @@ int slm_ui_init(void)
 		LOG_ERR("CONFIG_SLM_RI_PIN config error: %d", err);
 		return err;
 	}
+	err = gpio_pin_configure(ui_gpio_dev, CONFIG_SLM_DCD_PIN,
+				GPIO_OUTPUT);
+	if (err) {
+		LOG_ERR("CONFIG_SLM_DCD_PIN config error: %d", err);
+		return err;
+	}
 
 	return err;
 }

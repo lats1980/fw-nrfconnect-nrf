@@ -16,11 +16,13 @@ LOG_MODULE_REGISTER(slm_gpio, CONFIG_SLM_LOG_LEVEL);
 
 #define MAX_GPIO_PIN 31
 
+/* Regular GPIO */
 #define SLM_GPIO_FN_DISABLE	0	/* Disables pin for both input and output. */
 #define SLM_GPIO_FN_OUT		1	/* Enables pin as output. */
 #define SLM_GPIO_FN_IN_PU	21	/* Enables pin as input. Use internal pull up resistor. */
 #define SLM_GPIO_FN_IN_PD	22	/* Enables pin as input. Use internal pull down resistor. */
-#define SLM_GPIO_FN_DTR		310	/* Enables pin as DTR pin */
+/* RS-232 GPIO */
+#define SLM_GPIO_FN_RS232_DTR	310	/* Enables pin as RS-232 DTR pin */
 
 /* global functions defined in different resources */
 void rsp_send(const uint8_t *str, size_t len);
@@ -66,7 +68,7 @@ gpio_flags_t convert_flags(uint16_t fn)
 	case SLM_GPIO_FN_IN_PD:
 		gpio_flags = GPIO_INPUT | GPIO_PULL_DOWN;
 		break;
-	case SLM_GPIO_FN_DTR:
+	case SLM_GPIO_FN_RS232_DTR:
 		gpio_flags = GPIO_INPUT | GPIO_PULL_UP;
 		break;
 	default:
@@ -88,7 +90,7 @@ static void gpio_cb_handler(const struct device *gpio_dev, struct gpio_callback 
 		SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&slm_gpios, cur,
 					     next, node) {
 			if (BIT(cur->pin) & pins) {
-				if (cur->fn == SLM_GPIO_FN_DTR) {
+				if (cur->fn == SLM_GPIO_FN_RS232_DTR) {
 					LOG_DBG("Find pin: %d as DTR pin", cur->pin);
 					err = gpio_pin_interrupt_configure(gpio_dev, cur->pin,
 								GPIO_INT_DISABLE);
@@ -132,7 +134,7 @@ int do_gpio_pin_configure_set(gpio_pin_t pin, uint16_t fn)
 			if (cur->pin == pin) {
 				slm_gpio_pin = cur;
 			}
-			if (fn == SLM_GPIO_FN_DTR) {
+			if (fn == SLM_GPIO_FN_RS232_DTR) {
 				pin_mask |= BIT(cur->pin);
 			}
 		}
@@ -159,7 +161,7 @@ int do_gpio_pin_configure_set(gpio_pin_t pin, uint16_t fn)
 	slm_gpio_pin->fn = fn;
 
 	/* Configure GPIO callback for functional GPIO */
-	if (fn == SLM_GPIO_FN_DTR) {
+	if (fn == SLM_GPIO_FN_RS232_DTR) {
 		/* Add gpio callback */
 		pin_mask |= BIT(pin);
 		gpio_init_callback(&gpio_cb, gpio_cb_handler, pin_mask);
@@ -361,7 +363,7 @@ static void gpio_work_handle(struct k_work *work)
 	if (sys_slist_peek_head(&slm_gpios) != NULL) {
 		SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&slm_gpios, cur,
 					     next, node) {
-			if (cur->fn == SLM_GPIO_FN_DTR) {
+			if (cur->fn == SLM_GPIO_FN_RS232_DTR) {
 				uint32_t int_conf = GPIO_INT_DISABLE;
 
 				ret = gpio_pin_get(gpio_dev, cur->pin);

@@ -76,9 +76,9 @@ static struct tcp_proxy_t {
 	int role;		/* Client or Server proxy */
 	bool datamode;		/* Data mode flag*/
 	bool filtermode;	/* Filtering mode flag */
-	bool aa;                /* Auto accept mode flag*/
-	uint16_t ar;            /* accept-reject flag*/
-	uint16_t timeout;       /* Peer connection timeout */
+	bool aa;		/* Auto accept mode flag*/
+	uint16_t ar;		/* accept-reject flag*/
+	uint16_t timeout;	/* Peer connection timeout */
 } proxy;
 static struct pollfd fds[MAX_POLL_FD];
 static int nfds;
@@ -349,7 +349,12 @@ static int do_tcp_client_connect(const char *url,
 		ret = -errno;
 		goto exit;
 	}
-
+	/* Activate DCD pin */
+	ret = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_DCD_PIN, 1);
+	if (ret) {
+		LOG_ERR("Cannot activate DCD pin");
+		goto exit;
+	}
 	k_thread_create(&tcp_thread, tcp_thread_stack,
 			K_THREAD_STACK_SIZEOF(tcp_thread_stack),
 			tcpcli_thread_func, NULL, NULL, NULL,
@@ -519,13 +524,13 @@ static void tcp_data_handle(uint8_t *data, uint32_t length)
 	int ret;
 
 #if defined(CONFIG_SLM_UI)
-        if (length < NET_IPV4_MTU/3) {
-                ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-        } else if (length < 2*NET_IPV4_MTU/3) {
-                ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
-        } else {
-                ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
-        }
+	if (length < NET_IPV4_MTU/3) {
+		ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+	} else if (length < 2*NET_IPV4_MTU/3) {
+		ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+	} else {
+		ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+	}
 #endif
 
 	if (proxy.datamode) {
@@ -557,6 +562,7 @@ static void tcp_data_handle(uint8_t *data, uint32_t length)
 
 static void tcp_terminate_connection(int cause)
 {
+	int err = 0;
 	k_timer_stop(&conn_timer);
 
 	if (proxy.datamode) {
@@ -568,6 +574,11 @@ static void tcp_terminate_connection(int cause)
 	/* Send URC for server-initiated disconnect */
 	sprintf(rsp_buf, "\r\n#XTCPSVR: %d,\"disconnected\"\r\n", cause);
 	rsp_send(rsp_buf, strlen(rsp_buf));
+	/* De-activate DCD pin */
+	err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_DCD_PIN, 0);
+	if (err) {
+		LOG_ERR("Cannot de-activate DCD pin");
+	}
 }
 
 static void terminate_connection_wk(struct k_work *work)
@@ -672,6 +683,12 @@ static int tcpsvr_input(int infd)
 			}
 		}
 		proxy.sock_peer = ret;
+		/* Activate DCD pin */
+		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_DCD_PIN, 1);
+		if (err) {
+			LOG_ERR("Cannot activate DCD pin");
+			return err;
+		}
 		if (proxy.datamode) {
 			enter_datamode(tcp_datamode_callback);
 		}
@@ -880,6 +897,11 @@ exit:
 			sprintf(rsp_buf, "\r\n#XTCPCLI: 0,\"datamode\"\r\n");
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
+	}
+	/* De-activate DCD pin */
+	ret = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_DCD_PIN, 0);
+	if (ret) {
+		LOG_ERR("Cannot de-activate DCD pin");
 	}
 }
 
