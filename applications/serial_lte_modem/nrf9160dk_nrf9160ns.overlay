@@ -3,6 +3,8 @@
 	current-speed = <115200>;
 	tx-pin = <29>;
 	rx-pin = <28>;
+	/delete-property/ rts-pin;
+	/delete-property/ cts-pin;
 };
 
 &uart2 {
