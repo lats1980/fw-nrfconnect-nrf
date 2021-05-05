@@ -26,6 +26,7 @@ static void diag_event_update(struct k_work *work)
 	static bool led_on;
 
 	if (slm_diag_event_mask == 0){
+		dk_set_led(LED_ID_ERROR, 0);
 		k_delayed_work_submit(&slm_diag_update_work, K_MSEC(500));
 	}
 
@@ -80,10 +81,12 @@ int slm_diag_uninit(void)
 
 void slm_diag_set_event(enum slm_diag_event event)
 {
+	LOG_DBG("set diag event: %d", event);
 	slm_diag_event_mask |= 1 << event;
 }
 
 void slm_diag_clear_event(enum slm_diag_event event)
 {
+	LOG_DBG("clr diag event: %d", event);
 	slm_diag_event_mask &= ~(1UL << event);
 }
