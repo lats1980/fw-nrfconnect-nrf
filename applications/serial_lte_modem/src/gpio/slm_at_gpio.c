@@ -10,7 +10,15 @@
 #include <drivers/gpio.h>
 #include "slm_util.h"
 #include "slm_at_gpio.h"
+#if defined(CONFIG_SLM_UI)
+#include "slm_ui.h"
+#endif
+#if defined(CONFIG_SLM_STATS)
 #include "slm_stats.h"
+#endif
+#if defined(CONFIG_SLM_DIAG)
+#include "slm_diag.h"
+#endif
 
 LOG_MODULE_REGISTER(slm_gpio, CONFIG_SLM_LOG_LEVEL);
 
@@ -375,8 +383,46 @@ static void gpio_work_handle(struct k_work *work)
 					/* Enable UART if DTR is low state */
 					ret = poweron_uart(false);
 					int_conf = GPIO_INT_LEVEL_HIGH;
+#if defined(CONFIG_SLM_UI)
+					ret = slm_ui_init();
+					if (ret) {
+						LOG_ERR("Failed to init ui: %d", ret);
+					}
+#endif
+#if defined(CONFIG_SLM_DIAG)
+					ret = slm_diag_init();
+					if (ret) {
+						LOG_ERR("Failed to init diagnostic: %d", ret);
+					}
+#endif
+#if defined(CONFIG_SLM_STATS)
+					ret = slm_stats_init();
+					if (ret) {
+						LOG_ERR("SLM STATS could not be initialized: %d",
+							ret);
+					}
+#endif
 				} else {
-					/* Enable UART if DTR is high state */
+#if defined(CONFIG_SLM_STATS)
+					ret = slm_stats_uninit();
+					if (ret) {
+						LOG_WRN("SLM STATS could not be uninitialized: %d",
+							ret);
+					}
+#endif
+#if defined(CONFIG_SLM_DIAG)
+					ret = slm_diag_uninit();
+					if (ret) {
+						LOG_ERR("Failed to uninit diagnostic: %d", ret);
+					}
+#endif
+#if defined(CONFIG_SLM_UI)
+					ret = slm_ui_uninit();
+					if (ret) {
+						LOG_ERR("Failed to uninit ui: %d", ret);
+					}
+#endif
+					/* Disable UART if DTR is high state */
 					ret = poweroff_uart();
 					int_conf = GPIO_INT_LEVEL_LOW;
 				}
