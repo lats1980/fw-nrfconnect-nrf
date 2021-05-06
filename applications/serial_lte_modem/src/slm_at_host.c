@@ -14,6 +14,10 @@
 #include <modem/at_cmd.h>
 #include <modem/at_notif.h>
 #include <hal/nrf_uarte.h>
+#if defined(CONFIG_SLM_WATCHDOG)
+#include <hal/nrf_power.h>
+#include <hal/nrf_gpio.h>
+#endif
 
 LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 
@@ -25,6 +29,9 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 #define ERROR_STR	"\r\nERROR\r\n"
 #define FATAL_STR	"FATAL ERROR\r\n"
 #define SLM_SYNC_STR	"Ready\r\n"
+#if defined(CONFIG_SLM_WATCHDOG)
+#define SLM_WDRESET_STR	"\r\n#WDRESET\r\n"
+#endif
 
 /** The maximum allowed length of an AT command passed through the SLM
  *  The space is allocated statically. This limit is in turn limited by
@@ -684,6 +691,9 @@ int slm_at_host_init(void)
 {
 	int err;
 	uint32_t start_time;
+#if defined(CONFIG_SLM_WATCHDOG)
+	uint32_t rr = 0;
+#endif
 
 	/* Initialize the UART module */
 #if defined(CONFIG_SLM_CONNECT_UART_0)
@@ -775,7 +785,23 @@ int slm_at_host_init(void)
 	k_work_init(&cmd_send_work, cmd_send);
 	k_delayed_work_init(&uart_recovery_work, uart_recovery);
 	k_sem_give(&tx_done);
+#if defined(CONFIG_SLM_WATCHDOG)
+	rr = nrf_power_resetreas_get(NRF_POWER_NS);
+	LOG_DBG("RR: 0x%08x", rr);
+	if (rr & NRF_POWER_RESETREAS_DOG_MASK) {
+		nrf_power_resetreas_clear(NRF_POWER_NS, NRF_POWER_RESETREAS_DOG_MASK);
+		nrf_gpio_pin_set(CONFIG_SLM_RI_PIN);
+		nrf_gpio_cfg_output(CONFIG_SLM_RI_PIN);
+		k_sleep(K_MSEC(CONFIG_SLM_RI_DURATION));
+		nrf_gpio_pin_clear(CONFIG_SLM_RI_PIN);
+		nrf_gpio_cfg_output(CONFIG_SLM_RI_PIN);
+		rsp_send(SLM_WDRESET_STR, sizeof(SLM_WDRESET_STR)-1);
+	} else {
+		rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);
+	}
+#else
 	rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);
+#endif
 	slm_fota_post_process();
 
 	LOG_DBG("at_host init done");
