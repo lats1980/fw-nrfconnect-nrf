@@ -17,6 +17,9 @@
 #if defined(CONFIG_SLM_UI)
 #include "slm_ui.h"
 #endif
+#if defined(CONFIG_SLM_DIAG)
+#include "slm_diag.h"
+#endif
 
 LOG_MODULE_REGISTER(tcpip, CONFIG_SLM_LOG_LEVEL);
 
@@ -898,7 +901,17 @@ int handle_at_connect(enum at_cmd_type cmd_type)
 			LOG_ERR("Invalid port");
 			return -EINVAL;
 		}
+#if defined(CONFIG_SLM_DIAG)
+		/* Clear connection fail */
+		slm_diag_clear_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+#endif
 		err = do_connect(url, (uint16_t)port);
+#if defined(CONFIG_SLM_DIAG)
+		if (err < 0) {
+			/* Fail to create conntion */
+			slm_diag_set_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+		}
+#endif
 		break;
 
 	case AT_CMD_TYPE_READ_COMMAND:
@@ -978,7 +991,17 @@ int handle_at_accept(enum at_cmd_type cmd_type)
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
+#if defined(CONFIG_SLM_DIAG)
+		/* Clear connection fail */
+		slm_diag_clear_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+#endif
 		err = do_accept();
+#if defined(CONFIG_SLM_DIAG)
+		if (err < 0) {
+			/* Fail to create conntion */
+			slm_diag_set_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+		}
+#endif
 		break;
 
 	case AT_CMD_TYPE_READ_COMMAND:

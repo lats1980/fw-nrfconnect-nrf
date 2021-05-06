@@ -15,13 +15,12 @@
 #define SLM_DIAG_H__
 
 #include <zephyr.h>
-//#include <dk_buttons_and_leds.h>
 
 enum slm_diag_event {
 	SLM_DIAG_RADIO_FAIL = 1,
 	SLM_DIAG_LOW_BATTERY,
 	SLM_DIAG_UICC_FAIL,
-	SLM_DIAG_DATA_FAIL,
+	SLM_DIAG_DATA_CONNECTION_FAIL,
 	SLM_DIAG_CALL_FAIL,
 
 	SLM_DIAG_EVENT_COUNT

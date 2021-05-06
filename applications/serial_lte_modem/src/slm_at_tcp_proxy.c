@@ -16,6 +16,9 @@
 #if defined(CONFIG_SLM_UI)
 #include "slm_ui.h"
 #endif
+#if defined(CONFIG_SLM_DIAG)
+#include "slm_diag.h"
+#endif
 #include <drivers/gpio.h>
 
 LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
@@ -341,7 +344,10 @@ static int do_tcp_client_connect(const char *url,
 			goto exit;
 		}
 	}
-
+#if defined(CONFIG_SLM_DIAG)
+	/* Clear connection fail */
+	slm_diag_clear_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+#endif
 	ret = connect(proxy.sock, (struct sockaddr *)&remote,
 		sizeof(struct sockaddr_in));
 	if (ret < 0) {
@@ -379,6 +385,10 @@ exit:
 		slm_at_tcp_proxy_init();
 		sprintf(rsp_buf, "\r\n#XTCPCLI: %d\r\n", ret);
 		rsp_send(rsp_buf, strlen(rsp_buf));
+#if defined(CONFIG_SLM_DIAG)
+		/* Fail to create conntion */
+		slm_diag_set_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+#endif
 	}
 
 	return ret;
@@ -654,6 +664,10 @@ static int tcpsvr_input(int infd)
 		LOG_DBG("accept(): %d", ret);
 		if (ret < 0) {
 			LOG_ERR("accept() failed: %d", -errno);
+#if defined(CONFIG_SLM_DIAG)
+			/* Fail to create conntion */
+			slm_diag_set_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+#endif
 			return -errno;
 		}
 		if (nfds >= MAX_POLL_FD) {
@@ -689,6 +703,10 @@ static int tcpsvr_input(int infd)
 			LOG_ERR("Cannot activate DCD pin");
 			return err;
 		}
+#if defined(CONFIG_SLM_DIAG)
+		/* Clear connection fail */
+		slm_diag_clear_event(SLM_DIAG_DATA_CONNECTION_FAIL);
+#endif
 		if (proxy.datamode) {
 			enter_datamode(tcp_datamode_callback);
 		}
