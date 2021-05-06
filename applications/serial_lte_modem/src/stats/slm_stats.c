@@ -31,6 +31,8 @@ static K_THREAD_STACK_DEFINE(stats_thread_stack, STATS_THREAD_STACK_SIZE);
 #define AT_CEREG_READ				"AT+CEREG?"
 #define AT_CMD_CESQ_ON				"AT%CESQ=1"
 #define AT_CMD_CESQ_RESP			"%CESQ"
+#define AT_CMD_VBAT				"AT%XVBAT"
+#define AT_CMD_VBATLOWLVL_READ			"AT%XVBATLOWLVL?"
 #define AT_CEREG_PARAMS_COUNT_MAX		10
 #define AT_CEREG_REG_STATUS_INDEX		1
 #define AT_CEREG_TAC_INDEX			2
@@ -43,10 +45,13 @@ static K_THREAD_STACK_DEFINE(stats_thread_stack, STATS_THREAD_STACK_SIZE);
 #define GET_STATS_BUF_LEN			100
 #define SUBSCRIBE_STATS_BUF_LEN			10
 
+static struct k_delayed_work batlvl_read;
+
 static struct slm_stats_ctx {
 	int fd;
 	enum lte_lc_nw_reg_status reg_status;
 	uint16_t rsrp;
+	uint16_t xvbat;
 } stats;
 
 /* File descriptor */
@@ -59,6 +64,8 @@ enum lte_lc_notif_type {
 	LTE_LC_NOTIF_CSCON,
 	LTE_LC_NOTIF_CEDRXP,
 	LTE_LC_NOTIF_CESQ,
+	LTE_LC_NOTIF_XVBATLOWLVL,
+	LTE_LC_NOTIF_XVBAT,
 
 	LTE_LC_NOTIF_COUNT,
 };
@@ -68,6 +75,8 @@ static const char *const at_notifs[] = {
 	[LTE_LC_NOTIF_CSCON] = "+CSCON",
 	[LTE_LC_NOTIF_CEDRXP] = "+CEDRXP",
 	[LTE_LC_NOTIF_CESQ] = "%CESQ",
+	[LTE_LC_NOTIF_XVBATLOWLVL] = "%XVBATLOWLVL",
+	[LTE_LC_NOTIF_XVBAT] = "%XVBAT",
 };
 
 BUILD_ASSERT(ARRAY_SIZE(at_notifs) == LTE_LC_NOTIF_COUNT);
@@ -257,7 +266,7 @@ clean_exit:
 	return err;
 }
 
-int get_stats(void)
+static int get_stats(void)
 {
 	int err = 0;
 	char buf[GET_STATS_BUF_LEN];
@@ -433,6 +442,34 @@ static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 				}
 				break;
 			}
+			case LTE_LC_NOTIF_XVBATLOWLVL: {
+				/* The format of %XVBATLOWLVL:
+				 * %VBATLOWLVL: <lowlvl>,...
+				 */
+				int xvbatlowlvl = 0;
+
+				xvbatlowlvl = atoi(buf + strlen("%XVBATLOWLVL: "));
+				LOG_DBG("Current lvl: %hu Threshold: %hu", stats.xvbat, (uint16_t)xvbatlowlvl);
+				if (stats.xvbat > (uint16_t)xvbatlowlvl) {
+					stats.xvbat = 0;
+					slm_diag_clear_event(SLM_DIAG_LOW_BATTERY);
+				} else {
+					LOG_DBG("Low battery. Check again after %d ms",
+						CONFIG_SLM_STATS_BATTERY_INTERVAL);
+#if defined(CONFIG_SLM_DIAG)
+					slm_diag_set_event(SLM_DIAG_LOW_BATTERY);
+#endif
+				}
+				break;
+			}
+			case LTE_LC_NOTIF_XVBAT: {
+				/* The format of %XVBAT:
+				 * %XVBAT: <lvl>,...
+				 */
+				stats.xvbat = atoi(buf + strlen("%XVBAT: "));
+				LOG_DBG("battery level: %hu", stats.xvbat);
+				break;
+			}
 			default:
 				LOG_ERR("Unrecognized notification type: %d",
 					notif_type);
@@ -466,11 +503,15 @@ static int do_stats_start(void)
 		err = get_stats();
 		if (err != 0) {
 			LOG_ERR("Fail to get current stats");
+			return err;
 		}
 		err = subscribe_stats();
 		if (err != 0) {
 			LOG_ERR("Fail to subscribe stats");
+			return err;
 		}
+		k_delayed_work_submit(&batlvl_read,
+				K_MSEC(CONFIG_SLM_STATS_BATTERY_INTERVAL));
 		/* start stats thread */
 		k_thread_create(&stats_thread, stats_thread_stack,
 				K_THREAD_STACK_SIZEOF(stats_thread_stack),
@@ -486,7 +527,8 @@ static int do_stats_start(void)
 
 static int do_stats_stop(void)
 {
-	/* Open socket if it is not opened yet. */
+	k_delayed_work_cancel(&batlvl_read);
+	/* Close socket if it is opened. */
 	if (stats.fd != INVALID_SOCKET) {
 		if (close(stats.fd) != 0) {
 			LOG_ERR("Fail to close socket.");
@@ -504,7 +546,6 @@ static int do_stats_stop(void)
 
 int slm_stats_subscribe(void)
 {
-
 	int bytes_sent = 0;
 	int err = 0;
 
@@ -529,11 +570,36 @@ int slm_stats_subscribe(void)
 	return err;
 }
 
+static void batlvl_read_fn(struct k_work *work)
+{
+	int bytes_sent = 0;
+
+	if (stats.fd == INVALID_SOCKET) {
+		LOG_ERR("Not able to read vbat");
+	}
+	/* Read xvbat */
+	bytes_sent = send(stats.fd, AT_CMD_VBAT,
+				strlen(AT_CMD_VBAT), 0);
+	if (bytes_sent != strlen(AT_CMD_VBAT)) {
+		LOG_ERR("Fail to send AT_CMD_VBAT command: %d", -errno);
+	}
+	/* Read xvbatlowlvl */
+	bytes_sent = send(stats.fd, AT_CMD_VBATLOWLVL_READ,
+				strlen(AT_CMD_VBATLOWLVL_READ), 0);
+	if (bytes_sent != strlen(AT_CMD_VBATLOWLVL_READ)) {
+		LOG_ERR("Fail to send VBATLOWLVL_READ command: %d", -errno);
+	}
+	k_delayed_work_submit(&batlvl_read,
+				K_MSEC(CONFIG_SLM_STATS_BATTERY_INTERVAL));
+}
+
 int slm_stats_init(void)
 {
 	int err;
 
 	stats.fd = INVALID_SOCKET;
+	stats.xvbat = 0;
+	k_delayed_work_init(&batlvl_read, batlvl_read_fn);
 	err = do_stats_start();
 	if (err) {
 		LOG_ERR("Fail to start SLM stats. Error: %d", err);

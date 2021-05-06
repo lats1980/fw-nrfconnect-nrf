@@ -5,3 +5,7 @@
 
 config SLM_STATS
 	bool "SLM statistics"
+
+config SLM_STATS_BATTERY_INTERVAL
+	int "Interval to check battery level in ms"
+	default 60000

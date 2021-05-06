@@ -128,6 +128,40 @@ static int handle_at_cfun(enum at_cmd_type type)
 }
 #endif
 
+#if 0
+//#if defined(CONFIG_SLM_STATS)
+/**@brief handle AT%XVBATLOWLVL commands
+ */
+static int handle_at_xvbatlowlvl(enum at_cmd_type type)
+{
+	int ret = -ENOENT, err = 0;
+
+	if (type == AT_CMD_TYPE_SET_COMMAND) {
+		int32_t batlvl = 0;
+
+		if (at_params_valid_count_get(&at_param_list) >= 2) {
+			errno = at_params_int_get(&at_param_list, 1, &batlvl);
+			if (err) {
+				LOG_ERR("AT parameter error");
+				return ret;
+			}
+			if ((batlvl > 5000) || (batlvl < 3100)) {
+				LOG_ERR("Invalid uart batlvl provided.");
+				return ret;
+			}
+			err = slm_vbatlowlvl_subscribe((uint16_t)batlvl);
+			if (err != 0) {
+				LOG_ERR("Fail to subscribe battery notification");
+			}
+		} else {
+			return ret;
+		}
+	}
+
+	return ret;
+}
+#endif
+
 /**@brief handle AT#XSLMVER commands
  *  #XSLMVER
  *  AT#XSLMVER? not supported
@@ -536,6 +570,11 @@ static struct slm_at_cmd {
 
 #if defined(CONFIG_SLM_STATS)
 	{"AT+CFUN", handle_at_cfun},
+#endif
+#if 0
+#if defined(CONFIG_SLM_STATS)
+	{"AT%XVBATLOWLVL", handle_at_xvbatlowlvl},
+#endif
 #endif
 };
 
