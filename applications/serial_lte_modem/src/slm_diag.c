@@ -16,6 +16,8 @@
 LOG_MODULE_REGISTER(diag, CONFIG_SLM_LOG_LEVEL);
 
 #define DIAG_INTER_EVENT_PERIOD 3000
+/* Request diagnostic update no more often than 1 minute (time in milliseconds). */
+#define DIAG_UPDATE_PERIOD (60 * 1000)
 
 static uint32_t slm_diag_event_mask;
 static struct k_delayed_work slm_diag_update_work;
@@ -24,22 +26,23 @@ static void diag_event_update(struct k_work *work)
 {
 	static uint8_t current_diag_event, current_step;
 	static bool led_on;
+	static int64_t last_request_timestamp;
 
 	if (slm_diag_event_mask == 0){
 		dk_set_led(LED_ID_ERROR, 0);
 		k_delayed_work_submit(&slm_diag_update_work, K_MSEC(500));
+		return;
 	}
 
-	if ( slm_diag_event_mask & 1 << current_diag_event) {
-		LOG_DBG("Diag mask: %d event:%d",
-			slm_diag_event_mask,
-			current_diag_event);
+	LOG_DBG("Diag mask: %d event:%d", slm_diag_event_mask, current_diag_event);
+	if (slm_diag_event_mask & 1 << current_diag_event) {
 		dk_set_led(LED_ID_ERROR, !led_on);
 		led_on = !led_on;
 		if (!led_on) {
 			current_step++;
 		}
-		if(current_step == current_diag_event) {
+		if(current_step == current_diag_event + 1) {
+			last_request_timestamp = k_uptime_get();
 			k_delayed_work_submit(&slm_diag_update_work,
 					      K_MSEC(DIAG_INTER_EVENT_PERIOD));
 			current_diag_event++;
@@ -48,15 +51,19 @@ static void diag_event_update(struct k_work *work)
 			k_delayed_work_submit(&slm_diag_update_work,
 					      K_MSEC(500));
 		}
-	} else {
-		LOG_DBG("Diag mask: %d event:%d",
-			slm_diag_event_mask,
-			current_diag_event);
+	} else if (current_diag_event < SLM_DIAG_EVENT_COUNT) {
 		current_diag_event++;
-		k_delayed_work_submit(&slm_diag_update_work, K_MSEC(100));
-	}
-	if (current_diag_event == SLM_DIAG_EVENT_COUNT) {
-		current_diag_event = SLM_DIAG_RADIO_FAIL;
+		k_delayed_work_submit(&slm_diag_update_work, K_NO_WAIT);
+	} else {
+		if ((last_request_timestamp != 0) &&
+		(k_uptime_get() - last_request_timestamp) < DIAG_UPDATE_PERIOD) {
+			LOG_DBG("Diag led is updated less than 1 min ago");
+			k_delayed_work_submit(&slm_diag_update_work,
+					      K_MSEC(1000));
+		} else {
+			current_diag_event = SLM_DIAG_RADIO_FAIL;
+			k_delayed_work_submit(&slm_diag_update_work, K_NO_WAIT);
+		}
 	}
 }
 
