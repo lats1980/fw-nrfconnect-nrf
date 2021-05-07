@@ -95,7 +95,7 @@ int poweroff_uart(void);
 bool verify_datamode_control(uint16_t size_limit, uint16_t time_limit);
 extern int slm_setting_uart_save(void);
 
-#define SLM_VERSION	"\r\n#XSLMVER: \"Customized v0.14\"\r\n"
+#define SLM_VERSION	"\r\n#XSLMVER: \"Customized v0.15\"\r\n"
 
 static void modem_power_off(void)
 {
