@@ -100,6 +100,8 @@ extern struct at_param_list at_param_list;
 extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
 extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
 
+static struct k_delayed_work mod_flashled_work;
+
 extern const struct device *ui_gpio_dev;
 
 extern int poweron_uart(bool sync_str);
@@ -366,6 +368,12 @@ static int do_tcp_client_connect(const char *url,
 		LOG_ERR("Cannot activate DCD pin");
 		goto exit;
 	}
+	/* Activate MODEM FlASH LED pin */
+	k_delayed_work_cancel(&mod_flashled_work);
+	ret = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_MOD_FLASHLED_PIN, 1);
+	if (ret) {
+		LOG_ERR("Cannot activate MODEM FlASH LED pin");
+	}
 	k_thread_create(&tcp_thread, tcp_thread_stack,
 			K_THREAD_STACK_SIZEOF(tcp_thread_stack),
 			tcpcli_thread_func, NULL, NULL, NULL,
@@ -594,6 +602,7 @@ static void tcp_terminate_connection(int cause)
 	if (err) {
 		LOG_ERR("Cannot de-activate DCD pin");
 	}
+	k_delayed_work_submit(&mod_flashled_work, K_MSEC(250));
 }
 
 static void terminate_connection_wk(struct k_work *work)
@@ -707,6 +716,12 @@ static int tcpsvr_input(int infd)
 		if (err) {
 			LOG_ERR("Cannot activate DCD pin");
 			return err;
+		}
+		/* Activate MODEM FlASH LED pin */
+		k_delayed_work_cancel(&mod_flashled_work);
+		ret = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_MOD_FLASHLED_PIN, 1);
+		if (ret) {
+			LOG_ERR("Cannot activate MODEM FlASH LED pin");
 		}
 #if defined(CONFIG_SLM_DIAG)
 		/* Clear connection fail */
@@ -940,6 +955,7 @@ exit:
 	if (ret) {
 		LOG_ERR("Cannot de-activate DCD pin");
 	}
+	k_delayed_work_submit(&mod_flashled_work, K_MSEC(250));
 }
 
 /**@brief handle AT#XTCPFILTER commands
@@ -1361,6 +1377,28 @@ int handle_at_tcp_recv(enum at_cmd_type cmd_type)
 	return err;
 }
 
+static void mod_flashled_update(struct k_work *work)
+{
+	int nw_reg = 0, ret = 0;
+	static bool led_on;
+
+	nw_reg = slm_stats_get_nw_reg_status();
+	if ((nw_reg != 1) && (nw_reg != 5)) {
+		/* De-activate MODEM FLASH LED pin */
+		ret = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_MOD_FLASHLED_PIN, 0);
+		if (ret) {
+			LOG_ERR("Cannot de-activate MODEM FLASH LED pin");
+		}
+	} else {
+		led_on = !led_on;
+		ret = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_MOD_FLASHLED_PIN, led_on);
+		if (ret) {
+			LOG_ERR("Cannot toggle MODEM FLASH LED pin");
+		}
+	}
+	k_delayed_work_submit(&mod_flashled_work, K_MSEC(250));
+}
+
 /**@brief API to initialize TCP proxy AT commands handler
  */
 int slm_at_tcp_proxy_init(void)
@@ -1380,6 +1418,8 @@ int slm_at_tcp_proxy_init(void)
 	memset(ip_allowlist, 0x00, sizeof(ip_allowlist));
 	proxy.filtermode = false;
 	k_work_init(&disconnect_work, terminate_connection_wk);
+	k_delayed_work_init(&mod_flashled_work, mod_flashled_update);
+	k_delayed_work_submit(&mod_flashled_work, K_MSEC(250));
 
 	return 0;
 }
@@ -1394,6 +1434,7 @@ int slm_at_tcp_proxy_uninit(void)
 	if (proxy.role == AT_TCP_ROLE_SERVER) {
 		return do_tcp_server_stop();
 	}
+	k_delayed_work_cancel(&mod_flashled_work);
 
 	return 0;
 }

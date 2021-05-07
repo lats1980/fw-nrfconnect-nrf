@@ -40,6 +40,7 @@ int poweroff_uart(void);
 /* global variable defined in different resources */
 extern struct at_param_list at_param_list;
 extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern bool mute_leds;
 
 static const struct device *gpio_dev;
 static struct gpio_callback gpio_cb;
@@ -383,45 +384,14 @@ static void gpio_work_handle(struct k_work *work)
 					/* Enable UART if DTR is low state */
 					ret = poweron_uart(false);
 					int_conf = GPIO_INT_LEVEL_HIGH;
-#if defined(CONFIG_SLM_UI)
-					ret = slm_ui_init();
-					if (ret) {
-						LOG_ERR("Failed to init ui: %d", ret);
+					mute_leds = false;
+					ret = get_stats();
+					if (ret != 0) {
+						LOG_ERR("Fail to get current stats");
 					}
-#endif
-#if defined(CONFIG_SLM_DIAG)
-					ret = slm_diag_init();
-					if (ret) {
-						LOG_ERR("Failed to init diagnostic: %d", ret);
-					}
-#endif
-#if defined(CONFIG_SLM_STATS)
-					ret = slm_stats_init();
-					if (ret) {
-						LOG_ERR("SLM STATS could not be initialized: %d",
-							ret);
-					}
-#endif
 				} else {
-#if defined(CONFIG_SLM_STATS)
-					ret = slm_stats_uninit();
-					if (ret) {
-						LOG_WRN("SLM STATS could not be uninitialized: %d",
-							ret);
-					}
-#endif
-#if defined(CONFIG_SLM_DIAG)
-					ret = slm_diag_uninit();
-					if (ret) {
-						LOG_ERR("Failed to uninit diagnostic: %d", ret);
-					}
-#endif
-#if defined(CONFIG_SLM_UI)
-					ret = slm_ui_uninit();
-					if (ret) {
-						LOG_ERR("Failed to uninit ui: %d", ret);
-					}
-#endif
+					mute_leds = true;
+					slm_ui_mute();
 					/* Disable UART if DTR is high state */
 					ret = poweroff_uart();
 					int_conf = GPIO_INT_LEVEL_LOW;

@@ -19,6 +19,7 @@ LOG_MODULE_REGISTER(diag, CONFIG_SLM_LOG_LEVEL);
 /* Request diagnostic update no more often than 1 minute (time in milliseconds). */
 #define DIAG_UPDATE_PERIOD (60 * 1000)
 
+extern bool mute_leds;
 static uint32_t slm_diag_event_mask;
 static struct k_delayed_work slm_diag_update_work;
 
@@ -36,7 +37,11 @@ static void diag_event_update(struct k_work *work)
 
 	LOG_DBG("Diag mask: %d event:%d", slm_diag_event_mask, current_diag_event);
 	if (slm_diag_event_mask & 1 << current_diag_event) {
-		dk_set_led(LED_ID_ERROR, !led_on);
+		if (mute_leds) {
+			dk_set_led(LED_ID_ERROR, 0);
+		} else {
+			dk_set_led(LED_ID_ERROR, !led_on);
+		}
 		led_on = !led_on;
 		if (!led_on) {
 			current_step++;

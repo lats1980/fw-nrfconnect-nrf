@@ -266,7 +266,7 @@ clean_exit:
 	return err;
 }
 
-static int get_stats(void)
+int get_stats(void)
 {
 	int err = 0;
 	char buf[GET_STATS_BUF_LEN];

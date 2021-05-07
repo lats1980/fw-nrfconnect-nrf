@@ -115,6 +115,10 @@ config SLM_RI_PIN
 	int "Ring Indicator Pin"
 	default 20
 
+config SLM_MOD_FLASHLED_PIN
+	int "MOD_FLASHLED Pin"
+	default 24
+
 config SLM_DCD_PIN
 	int "DCD Pin"
 	default 26

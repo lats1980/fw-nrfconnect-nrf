@@ -16,6 +16,7 @@ const struct device *ui_gpio_dev;
 
 LOG_MODULE_REGISTER(ui, CONFIG_SLM_LOG_LEVEL);
 
+bool mute_leds;
 static struct led leds[LED_ID_COUNT];
 
 static void work_handler(struct k_work *work)
@@ -26,7 +27,11 @@ static void work_handler(struct k_work *work)
 
 	__ASSERT_NO_MSG(led->effect->steps[led->effect_step].substep_cnt > 0);
 	LOG_DBG("LED %d state %d", led_map[led->id], effect_step->led_on);
-	dk_set_led(led_map[led->id], effect_step->led_on);
+	if (mute_leds) {
+		dk_set_led(led_map[led->id], 0);
+	} else {
+		dk_set_led(led_map[led->id], effect_step->led_on);
+	}
 
 	led->effect_substep++;
 	if (led->effect_substep == effect_step->substep_cnt) {
@@ -81,9 +86,6 @@ static void led_update(struct led *led)
 void ui_led_set_state(enum led_id id, enum ui_led_state state)
 {
 	LOG_DBG("LED %d state change to: %d", id, state);
-	if (leds[id].state == state && (state < UI_DATA_NONE || state > UI_DATA_FAST)) {
-		return;
-	}
 	leds[id].state = state;
 	leds[id].effect = &led_effect_list[state];
 	led_update(&leds[id]);
@@ -93,6 +95,7 @@ int slm_ui_init(void)
 {
 	int err = 0;
 
+	mute_leds = false;
 	err = dk_leds_init();
 	if (err) {
 		LOG_ERR("Could not initialize leds, err code: %d", err);
@@ -132,6 +135,12 @@ int slm_ui_init(void)
 		LOG_ERR("CONFIG_SLM_DCD_PIN config error: %d", err);
 		return err;
 	}
+	err = gpio_pin_configure(ui_gpio_dev, CONFIG_SLM_MOD_FLASHLED_PIN,
+				GPIO_OUTPUT);
+	if (err) {
+		LOG_ERR("CONFIG_SLM_MOD_FLASHLED_PIN config error: %d", err);
+		return err;
+	}
 
 	return err;
 }
@@ -157,4 +166,14 @@ int slm_ui_uninit(void)
 	k_delayed_work_cancel(&leds[LED_ID_SIGNAL].work);
 
 	return err;
+}
+
+void slm_ui_mute(void)
+{
+	int err = 0;
+
+	err = dk_set_leds_state(DK_NO_LEDS_MSK, DK_ALL_LEDS_MSK);
+	if (err) {
+		LOG_ERR("Could not set leds state, err code: %d", err);
+	}
 }

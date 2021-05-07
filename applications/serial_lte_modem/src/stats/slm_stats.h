@@ -45,6 +45,14 @@ int slm_stats_subscribe(void);
  */
 int slm_stats_get_nw_reg_status(void);
 
+/**
+ * @brief get network and registration stats
+ *
+ * @retval 0 If the operation was successful.
+ *           Otherwise, a (negative) error code is returned.
+ */
+int get_stats(void);
+
 /** @} */
 
 #endif /* SLM_STATS_ */

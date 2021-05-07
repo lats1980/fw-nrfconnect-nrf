@@ -159,6 +159,11 @@ int slm_ui_init(void);
 int slm_ui_uninit(void);
 
 /**
+ * @brief Mute/unmute UI.
+ */
+void slm_ui_mute(void);
+
+/**
  * @brief Sets LED effect based in UI LED state.
  */
 void ui_led_set_state(enum led_id, enum ui_led_state state);
