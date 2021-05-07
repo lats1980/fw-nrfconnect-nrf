@@ -593,6 +593,12 @@ static void batlvl_read_fn(struct k_work *work)
 				K_MSEC(CONFIG_SLM_STATS_BATTERY_INTERVAL));
 }
 
+int slm_stats_get_nw_reg_status(void)
+{
+	LOG_DBG("NW reg status: %d", (int)stats.reg_status);
+	return (int)stats.reg_status;
+}
+
 int slm_stats_init(void)
 {
 	int err;
