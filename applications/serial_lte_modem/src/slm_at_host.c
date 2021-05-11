@@ -792,9 +792,11 @@ int slm_at_host_init(void)
 		nrf_power_resetreas_clear(NRF_POWER_NS, NRF_POWER_RESETREAS_DOG_MASK);
 		nrf_gpio_pin_set(CONFIG_SLM_RI_PIN);
 		nrf_gpio_cfg_output(CONFIG_SLM_RI_PIN);
-		k_sleep(K_MSEC(CONFIG_SLM_RI_DURATION));
+		k_sleep(K_MSEC(CONFIG_SLM_RI_ON_DURATION));
 		nrf_gpio_pin_clear(CONFIG_SLM_RI_PIN);
 		nrf_gpio_cfg_output(CONFIG_SLM_RI_PIN);
+		k_sleep(K_MSEC(CONFIG_SLM_RI_OFF_DURATION));
+		k_sleep(K_MSEC(CONFIG_SLM_POST_RI_DURATION));
 		rsp_send(SLM_WDRESET_STR, sizeof(SLM_WDRESET_STR)-1);
 	} else {
 		rsp_send(SLM_SYNC_STR, sizeof(SLM_SYNC_STR)-1);

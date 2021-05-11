@@ -646,12 +646,13 @@ static int tcpsvr_input(int infd)
 			LOG_ERR("Cannot write RI gpio high");
 			return err;
 		}
-		k_sleep(K_MSEC(CONFIG_SLM_RI_DURATION));
+		k_sleep(K_MSEC(CONFIG_SLM_RI_ON_DURATION));
 		err = gpio_pin_set(ui_gpio_dev, CONFIG_SLM_RI_PIN, 0);
 		if (err) {
 			LOG_ERR("Cannot write RI gpio low");
 			return err;
 		}
+		k_sleep(K_MSEC(CONFIG_SLM_RI_OFF_DURATION));
 		/* If server auto-accept is on, accept this connection.
 		 * Otherwise, accept the connection according to AT#TCPSVRAR
 		 */
@@ -736,6 +737,7 @@ static int tcpsvr_input(int infd)
 		if (err != 0) {
 			LOG_ERR("Fail to wake up UART");
 		}
+		k_sleep(K_MSEC(CONFIG_SLM_POST_RI_DURATION));
 		sprintf(rsp_buf, "\r\n#XTCPSVR: \"%s\",\"connected\"\r\n",
 			peer_addr);
 		rsp_send(rsp_buf, strlen(rsp_buf));

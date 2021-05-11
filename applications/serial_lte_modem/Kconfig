@@ -123,8 +123,16 @@ config SLM_DCD_PIN
 	int "DCD Pin"
 	default 26
 
-config SLM_RI_DURATION
-	int "Duration the Ring Indicator Pin to be toggled in ms"
+config SLM_RI_ON_DURATION
+	int "Duration of the Ring Indicator Pin to be turned on in ms"
+	default 1500
+
+config SLM_RI_OFF_DURATION
+	int "Duration of the Ring Indicator Pin to be turned off in ms"
+	default 1500
+
+config SLM_POST_RI_DURATION
+	int "Duration of the wait after Ring Indicator to send URC"
 	default 500
 
 #
