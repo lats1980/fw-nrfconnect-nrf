@@ -82,7 +82,6 @@ static struct slm_work_info {
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
 extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
-extern uint16_t datamode_size_limit;
 extern uint16_t datamode_time_limit;
 extern struct uart_config slm_uart;
 
@@ -92,7 +91,7 @@ void enter_sleep(void);
 int slm_uart_configure(uint32_t baudrate, uint8_t hwfc);
 void rsp_send(const uint8_t *str, size_t len);
 int poweroff_uart(void);
-bool verify_datamode_control(uint16_t size_limit, uint16_t time_limit);
+bool verify_datamode_control(uint16_t time_limit, uint16_t *time_limit_min);
 extern int slm_setting_uart_save(void);
 
 #define SLM_VERSION	"\r\n#XSLMVER: \"Customized v0.15\"\r\n"
@@ -345,28 +344,22 @@ static int handle_at_slmuart(enum at_cmd_type type)
 }
 
 /**@brief handle AT#XDATACTRL commands
- *  AT#XDATACTRL=<size_limit>,<time_limit>
+ *  AT#XDATACTRL=<time_limit>
  *  AT#XDATACTRL?
  *  AT#XDATACTRL=?
  */
 static int handle_at_datactrl(enum at_cmd_type cmd_type)
 {
 	int ret = 0;
-	uint16_t size_limit;
-	uint16_t time_limit;
+	uint16_t time_limit, time_limit_min;
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		ret = at_params_short_get(&at_param_list, 1, &size_limit);
+		ret = at_params_short_get(&at_param_list, 1, &time_limit);
 		if (ret) {
 			return ret;
 		}
-		ret = at_params_short_get(&at_param_list, 2, &time_limit);
-		if (ret) {
-			return ret;
-		}
-		if (verify_datamode_control(size_limit, time_limit)) {
-			datamode_size_limit = size_limit;
+		if (verify_datamode_control(time_limit, NULL)) {
 			datamode_time_limit = time_limit;
 		} else {
 			return -EINVAL;
@@ -374,16 +367,14 @@ static int handle_at_datactrl(enum at_cmd_type cmd_type)
 		break;
 
 	case AT_CMD_TYPE_READ_COMMAND:
-		sprintf(rsp_buf, "\r\n#XDATACTRL: %d,%d\r\n",
-			datamode_size_limit, datamode_time_limit);
+		(void)verify_datamode_control(datamode_time_limit, &time_limit_min);
+		sprintf(rsp_buf, "\r\n#XDATACTRL: %d,%d\r\n", datamode_time_limit, time_limit_min);
 		rsp_send(rsp_buf, strlen(rsp_buf));
-		ret = 0;
 		break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "\r\n#XDATACTRL=<size_limit>,<time_limit>\r\n");
+		sprintf(rsp_buf, "\r\n#XDATACTRL=<time_limit>\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
-		ret = 0;
 		break;
 
 	default:
