@@ -16,6 +16,9 @@
 #include "slm_ui.h"
 #include "slm_diag.h"
 #endif
+#if defined(CONFIG_SLM_WATCHDOG)
+#include <drivers/watchdog.h>
+#endif
 
 LOG_MODULE_REGISTER(stats, CONFIG_SLM_LOG_LEVEL);
 
@@ -45,6 +48,19 @@ static K_THREAD_STACK_DEFINE(stats_thread_stack, STATS_THREAD_STACK_SIZE);
 #define SUBSCRIBE_STATS_BUF_LEN			10
 
 static struct k_delayed_work batlvl_read;
+
+#if defined(CONFIG_SLM_WATCHDOG)
+#define WDT_FEED_WORKER_DELAY_MS \
+	((CONFIG_SLM_WATCHDOG_TIMEOUT_MSEC)/2)
+
+struct wdt_data_storage {
+	const struct device *wdt_drv;
+	int wdt_channel_id;
+	struct k_delayed_work system_workqueue_work;
+	struct k_work second_workqueue_work;
+};
+static struct wdt_data_storage wdt_data;
+#endif
 
 static struct slm_stats_ctx {
 	int fd;
@@ -334,6 +350,86 @@ static int subscribe_stats(void)
 	return 0;
 }
 
+#if defined(CONFIG_SLM_WATCHDOG)
+static int watchdog_timeout_install(struct wdt_data_storage *data)
+{
+	static const struct wdt_timeout_cfg wdt_settings = {
+			.window = {
+				.min = 0,
+				.max = CONFIG_SLM_WATCHDOG_TIMEOUT_MSEC,
+			},
+			.callback = NULL,
+			.flags = WDT_FLAG_RESET_SOC
+	};
+
+	__ASSERT_NO_MSG(data != NULL);
+	data->wdt_channel_id = wdt_install_timeout(
+			data->wdt_drv, &wdt_settings);
+	if (data->wdt_channel_id < 0) {
+		LOG_ERR("Cannot install watchdog timer! Error code: %d",
+			data->wdt_channel_id);
+		return -EFAULT;
+	}
+	LOG_DBG("Watchdog timeout installed. Timeout: %d",
+		CONFIG_SLM_WATCHDOG_TIMEOUT_MSEC);
+	return 0;
+}
+
+static int watchdog_start(struct wdt_data_storage *data)
+{
+	__ASSERT_NO_MSG(data != NULL);
+	int err = wdt_setup(data->wdt_drv, WDT_OPT_PAUSE_IN_SLEEP | WDT_OPT_PAUSE_HALTED_BY_DBG);
+
+	if (err) {
+		LOG_ERR("Cannot start watchdog! Error code: %d", err);
+	} else {
+		LOG_DBG("Watchdog started");
+	}
+	return err;
+}
+
+static int watchdog_feed_enable(struct wdt_data_storage *data)
+{
+	__ASSERT_NO_MSG(data != NULL);
+	int err = wdt_feed(data->wdt_drv, data->wdt_channel_id);
+
+	if (err) {
+		LOG_ERR("Cannot feed watchdog. Error code: %d", err);
+	}
+
+	return err;
+}
+
+static int watchdog_enable(struct wdt_data_storage *data)
+{
+	__ASSERT_NO_MSG(data != NULL);
+	int err = -ENXIO;
+
+	data->wdt_drv = device_get_binding(DT_LABEL(DT_NODELABEL(wdt)));
+	if (data->wdt_drv == NULL) {
+		LOG_ERR("Cannot bind watchdog driver");
+		return err;
+	}
+
+	err = watchdog_timeout_install(data);
+	if (err) {
+		return err;
+	}
+
+	err = watchdog_start(data);
+	if (err) {
+		return err;
+	}
+
+	err = watchdog_feed_enable(data);
+	if (err) {
+		return err;
+	}
+
+	return err;
+}
+#endif
+
 static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 {
 	int err;
@@ -346,11 +442,25 @@ static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 	ARG_UNUSED(arg3);
 
 	while (stats.fd != INVALID_SOCKET) {
+#if defined(CONFIG_SLM_WATCHDOG)
+		err = poll(&fds, 1, WDT_FEED_WORKER_DELAY_MS);
+		if (err < 0) {
+			LOG_ERR("ERROR: poll %d", errno);
+			break;
+		}
+		err = wdt_feed(wdt_data.wdt_drv, wdt_data.wdt_channel_id);
+		if (err) {
+			LOG_ERR("Cannot feed watchdog. Error code: %d", err);
+		} else {
+			LOG_DBG("Feeding watchdog");
+		}
+#else
 		err = poll(&fds, 1, -1);
 		if (err < 0) {
 			LOG_ERR("ERROR: poll %d", errno);
 			break;
 		}
+#endif
 		if ((fds.revents & POLLIN) == POLLIN) {
 			bytes_read = recv(stats.fd, buf, sizeof(buf), 0);
 
@@ -493,7 +603,7 @@ static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 
 static int do_stats_start(void)
 {
-	int err = 0;
+	int err = -EINVAL;
 
 	/* Open socket if it is not opened yet. */
 	if (stats.fd == INVALID_SOCKET) {
@@ -524,7 +634,6 @@ static int do_stats_start(void)
 				STATS_THREAD_PRIORITY, K_USER, K_NO_WAIT);
 	} else {
 		LOG_ERR("Stats socket was already opened.");
-		return -EINVAL;
 	}
 
 	return err;
@@ -606,7 +715,7 @@ int slm_stats_get_nw_reg_status(void)
 
 int slm_stats_init(void)
 {
-	int err;
+	int err = -EINVAL;
 
 	stats.fd = INVALID_SOCKET;
 	stats.xvbat = 0;
@@ -614,19 +723,25 @@ int slm_stats_init(void)
 	err = do_stats_start();
 	if (err) {
 		LOG_ERR("Fail to start SLM stats. Error: %d", err);
+		return err;
 	}
-
-	return 0;
+#if defined(CONFIG_SLM_WATCHDOG)
+	err = watchdog_enable(&wdt_data);
+	if (err) {
+		LOG_ERR("Fail to enable SLM watchdog. Error: %d", err);
+	}
+#endif
+	return err;
 }
 
 int slm_stats_uninit(void)
 {
-	int err;
+	int err = -EINVAL;
 
 	err = do_stats_stop();
 	if (err) {
 		LOG_ERR("Fail to stop SLM stats. Error: %d", err);
 	}
 
-	return 0;
+	return err;
 }
