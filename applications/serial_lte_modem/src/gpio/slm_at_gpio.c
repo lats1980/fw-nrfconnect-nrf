@@ -22,16 +22,6 @@
 
 LOG_MODULE_REGISTER(slm_gpio, CONFIG_SLM_LOG_LEVEL);
 
-#define MAX_GPIO_PIN 31
-
-/* Regular GPIO */
-#define SLM_GPIO_FN_DISABLE	0	/* Disables pin for both input and output. */
-#define SLM_GPIO_FN_OUT		1	/* Enables pin as output. */
-#define SLM_GPIO_FN_IN_PU	21	/* Enables pin as input. Use internal pull up resistor. */
-#define SLM_GPIO_FN_IN_PD	22	/* Enables pin as input. Use internal pull down resistor. */
-/* RS-232 GPIO */
-#define SLM_GPIO_FN_RS232_DTR	310	/* Enables pin as RS-232 DTR pin */
-
 /* global functions defined in different resources */
 void rsp_send(const uint8_t *str, size_t len);
 int poweron_uart(bool sync_str);
@@ -40,9 +30,8 @@ int poweroff_uart(void);
 /* global variable defined in different resources */
 extern struct at_param_list at_param_list;
 extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
-extern bool mute_leds;
 
-static const struct device *gpio_dev;
+const struct device *gpio_dev;
 static struct gpio_callback gpio_cb;
 static sys_slist_t slm_gpios = SYS_SLIST_STATIC_INIT(&slm_gpios);
 static struct k_work gpio_work;
@@ -80,6 +69,15 @@ gpio_flags_t convert_flags(uint16_t fn)
 	case SLM_GPIO_FN_RS232_DTR:
 		gpio_flags = GPIO_INPUT | GPIO_PULL_UP;
 		break;
+#if defined(CONFIG_SLM_UI)
+	case SLM_GPIO_FN_LTE:
+	case SLM_GPIO_FN_DATA:
+	case SLM_GPIO_FN_SIGNAL:
+	case SLM_GPIO_FN_DIAG:
+	case SLM_GPIO_FN_MOD_FLASH:
+		gpio_flags = GPIO_OUTPUT;
+		break;
+#endif
 	default:
 		LOG_ERR("Fail to convert gpio flag");
 		break;
@@ -384,14 +382,19 @@ static void gpio_work_handle(struct k_work *work)
 					/* Enable UART if DTR is low state */
 					ret = poweron_uart(false);
 					int_conf = GPIO_INT_LEVEL_HIGH;
-					mute_leds = false;
+					ui_led_set_state(LED_ID_LTE, UI_UNMUTE);
+					ui_led_set_state(LED_ID_DATA, UI_UNMUTE);
+					ui_led_set_state(LED_ID_SIGNAL, UI_UNMUTE);
+					ui_led_set_state(LED_ID_DIAG, UI_UNMUTE);
 					ret = get_stats();
 					if (ret != 0) {
 						LOG_ERR("Fail to get current stats");
 					}
 				} else {
-					mute_leds = true;
-					slm_ui_mute();
+					ui_led_set_state(LED_ID_LTE, UI_MUTE);
+					ui_led_set_state(LED_ID_DATA, UI_MUTE);
+					ui_led_set_state(LED_ID_SIGNAL, UI_MUTE);
+					ui_led_set_state(LED_ID_DIAG, UI_MUTE);
 					/* Disable UART if DTR is high state */
 					ret = poweroff_uart();
 					int_conf = GPIO_INT_LEVEL_LOW;
@@ -408,6 +411,23 @@ static void gpio_work_handle(struct k_work *work)
 			}
 		}
 	}
+}
+
+int slm_gpio_get_ui_pin(uint16_t fn)
+{
+	int ret = -EINVAL;
+	struct slm_gpio_pin_t *cur = NULL, *next = NULL;
+
+	/* Trace gpio list */
+	if (sys_slist_peek_head(&slm_gpios) != NULL) {
+		SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&slm_gpios, cur, next, node) {
+			if (cur->fn == fn) {
+				return (int)cur->pin;
+			}
+		}
+	}
+
+	return ret;
 }
 
 int slm_at_gpio_init(void)

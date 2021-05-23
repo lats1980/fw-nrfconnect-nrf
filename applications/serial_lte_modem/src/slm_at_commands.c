@@ -640,6 +640,7 @@ int slm_at_init(void)
 		LOG_ERR("TCPIP could not be initialized: %d", err);
 		return -EFAULT;
 	}
+	LOG_ERR("slm_at_tcpip_init ok");
 #if defined(CONFIG_SLM_NATIVE_TLS)
 	err = slm_at_cmng_init();
 	if (err) {
@@ -685,12 +686,21 @@ int slm_at_init(void)
 		return -EFAULT;
 	}
 #endif
+#if defined(CONFIG_SLM_GPIO)
+	err = slm_at_gpio_init();
+	if (err) {
+		LOG_ERR("GPIO could not be initialized: %d", err);
+		return -EFAULT;
+	}
+	LOG_ERR("slm_at_gpio_init ok");
+#endif
 #if defined(CONFIG_SLM_UI)
 	err = slm_ui_init();
 	if (err) {
 		LOG_ERR("Failed to init ui: %d", err);
 		return -EFAULT;
 	}
+	LOG_ERR("slm_ui_init ok");
 #endif
 #if defined(CONFIG_SLM_DIAG)
 	err = slm_diag_init();
@@ -710,13 +720,6 @@ int slm_at_init(void)
 	err = slm_at_twi_init();
 	if (err) {
 		LOG_ERR("TWI could not be initialized: %d", err);
-		return -EFAULT;
-	}
-#endif
-#if defined(CONFIG_SLM_GPIO)
-	err = slm_at_gpio_init();
-	if (err) {
-		LOG_ERR("GPIO could not be initialized: %d", err);
 		return -EFAULT;
 	}
 #endif
