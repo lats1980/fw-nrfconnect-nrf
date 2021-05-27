@@ -19,6 +19,9 @@
 #include <hal/nrf_power.h>
 #include <hal/nrf_gpio.h>
 #endif
+#if defined(CONFIG_SLM_DIAG)
+#include "slm_diag.h"
+#endif
 
 LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 
@@ -562,6 +565,13 @@ static void cmd_send(struct k_work *work)
 	case AT_CMD_ERROR_CME:
 		sprintf(str, "\r\n+CME ERROR: %d\r\n", err);
 		rsp_send(str, strlen(str));
+		break;
+	case AT_CMD_ERROR_QUEUE:
+	case AT_CMD_ERROR_WRITE:
+	case AT_CMD_ERROR_READ:
+#if defined(CONFIG_SLM_DIAG)
+		slm_diag_set_event(SLM_DIAG_RADIO_FAIL);
+#endif
 		break;
 	default:
 		break;

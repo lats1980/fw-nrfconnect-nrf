@@ -446,6 +446,9 @@ static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 		err = poll(&fds, 1, WDT_FEED_WORKER_DELAY_MS);
 		if (err < 0) {
 			LOG_ERR("ERROR: poll %d", errno);
+#if defined(CONFIG_SLM_DIAG)
+			slm_diag_set_event(SLM_DIAG_RADIO_FAIL);
+#endif
 			break;
 		}
 		err = wdt_feed(wdt_data.wdt_drv, wdt_data.wdt_channel_id);
@@ -458,6 +461,9 @@ static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 		err = poll(&fds, 1, -1);
 		if (err < 0) {
 			LOG_ERR("ERROR: poll %d", errno);
+#if defined(CONFIG_SLM_DIAG)
+			slm_diag_set_event(SLM_DIAG_RADIO_FAIL);
+#endif
 			break;
 		}
 #endif
@@ -468,6 +474,9 @@ static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 			if (bytes_read < 0) {
 				LOG_ERR("Unrecoverable reception error (err: %d), "
 					"thread killed", errno);
+#if defined(CONFIG_SLM_DIAG)
+				slm_diag_set_event(SLM_DIAG_RADIO_FAIL);
+#endif
 				if (stats.fd != INVALID_SOCKET) {
 					close(stats.fd);
 				}
@@ -503,9 +512,9 @@ static void stats_thread_fn(void *arg1, void *arg2, void *arg3)
 
 				if (stats.reg_status == LTE_LC_NW_REG_UICC_FAIL) {
 					LOG_ERR("Network registration fail: UICC");
-	#if defined(CONFIG_SLM_DIAG)
+#if defined(CONFIG_SLM_DIAG)
 					slm_diag_set_event(SLM_DIAG_UICC_FAIL);
-	#endif
+#endif
 				} else if (stats.reg_status == LTE_LC_NW_REG_SEARCHING) {
 					LOG_DBG("Network registration status: Connecting");
 					ui_led_set_state(LED_ID_LTE, UI_LTE_CONNECTING);
