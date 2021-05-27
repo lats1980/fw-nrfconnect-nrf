@@ -53,7 +53,7 @@ int decode_hw_rev(int16_t v1, int16_t v2)
 	int16_t v3 = 0;
 
 	/* Step 4: verify R2 */
-	if (v1 <= (v2 * 11) / 10) {
+	if (v1 <= (v2 * 105) / 100) {
 		/* R2 is not fitted. Discharge for 1 ms */
 		nrf_saadc_disable(NRF_SAADC);
 		nrf_saadc_channel_input_set(NRF_SAADC,
@@ -113,6 +113,7 @@ int decode_hw_rev(int16_t v1, int16_t v2)
 			code = 14;
 		}
 	}
+	LOG_DBG("v1:%d v2:%d", v1, v2);
 
 	return code;
 }
@@ -155,7 +156,6 @@ int do_hw_rev_read(void)
 	}
 	v2 = m_sample_buffer[0];
 
-	LOG_DBG("v1:%d v2:%d", v1, v2);
 	code = decode_hw_rev(v1, v2);
 	LOG_DBG("Decoded HW revision: %d", code);
 	nrf_saadc_disable(NRF_SAADC);
