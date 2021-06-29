@@ -344,9 +344,9 @@ static void silence_timer_handler(struct k_timer *timer)
 	}
 
 	/* quit datamode */
-	(void)exit_datamode();
 	if (datamode_handler) {
 		(void)datamode_handler(DATAMODE_EXIT, NULL, 0);
+		(void)exit_datamode();
 	} else {
 		LOG_WRN("missing datamode handler");
 	}
