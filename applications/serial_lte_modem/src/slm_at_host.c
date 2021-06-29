@@ -281,7 +281,7 @@ bool verify_datamode_control(uint16_t time_limit, uint16_t *min_time_limit)
 		*min_time_limit = min_time;
 	}
 
-	return false;
+	return true;
 }
 
 static void response_handler(void *context, const char *response)
