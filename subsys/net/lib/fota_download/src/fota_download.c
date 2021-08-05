@@ -9,14 +9,14 @@
 #include <net/fota_download.h>
 #include <net/download_client.h>
 #include <pm_config.h>
+#include <dfu/dfu_target_mcuboot.h>
 
-#if defined(PM_S1_ADDRESS) || defined(CONFIG_DFU_TARGET_MCUBOOT)
+#if defined(PM_S1_ADDRESS) && defined(CONFIG_DFU_TARGET_MCUBOOT)
 /* MCUBoot support is required */
 #include <fw_info.h>
 #ifdef CONFIG_TRUSTED_EXECUTION_NONSECURE
 #include <secure_services.h>
 #endif
-#include <dfu/dfu_target_mcuboot.h>
 #endif
 
 /* If bootloader upgrades are supported we need room for two file strings. */
