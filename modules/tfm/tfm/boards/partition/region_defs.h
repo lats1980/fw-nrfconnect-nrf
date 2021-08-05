@@ -41,6 +41,10 @@
  */
 #define PSA_INITIAL_ATTEST_TOKEN_MAX_SIZE   (0x250)
 
+#ifdef PM_MCUBOOT_ADDRESS
+#define PM_TFM_SECONDARY_ADDRESS PM_MCUBOOT_SECONDARY_ADDRESS
+#endif
+
 #ifndef LINK_TO_SECONDARY_PARTITION
 #define S_IMAGE_PRIMARY_PARTITION_OFFSET   (PM_TFM_PRIMARY_ADDRESS)
 #define S_IMAGE_SECONDARY_PARTITION_OFFSET (PM_TFM_SECONDARY_ADDRESS)
@@ -61,9 +65,12 @@
  * because we reserve space for the image header and trailer introduced
  * by the bootloader.
  */
-#ifdef BL2
+#if defined(BL2)
 #define BL2_HEADER_SIZE      (0x400)       /* 1 KB */
 #define BL2_TRAILER_SIZE     (0x400)       /* 1 KB */
+#elif defined(PM_MCUBOOT_ADDRESS)
+#define BL2_HEADER_SIZE      (0x000)       /* 1 KB */
+#define BL2_TRAILER_SIZE     (0x000)       /* 1 KB */
 #else
 /* No header if no bootloader, but keep IMAGE_CODE_SIZE the same */
 #define BL2_HEADER_SIZE      (0x0)
@@ -125,7 +132,7 @@
 #define SECONDARY_PARTITION_SIZE (FLASH_S_PARTITION_SIZE + \
 				  FLASH_NS_PARTITION_SIZE)
 
-#ifdef BL2
+#if defined(BL2) || defined(PM_MCUBOOT_ADDRESS)
 /* Bootloader regions */
 #define BL2_CODE_START    (FLASH_AREA_BL2_OFFSET)
 #define BL2_CODE_SIZE     (FLASH_AREA_BL2_SIZE)

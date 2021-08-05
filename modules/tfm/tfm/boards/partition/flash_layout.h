@@ -56,6 +56,9 @@
 #ifdef CONFIG_TFM_BL2
 #define FLASH_AREA_BL2_OFFSET      (PM_BL2_ADDRESS)
 #define FLASH_AREA_BL2_SIZE        (PM_BL2_SIZE)
+#elif defined(CONFIG_BOOTLOADER_MCUBOOT)
+#define FLASH_AREA_BL2_OFFSET      (PM_MCUBOOT_ADDRESS)
+#define FLASH_AREA_BL2_SIZE        (PM_MCUBOOT_SIZE)
 #endif /* BL2 */
 
 /* Secure image primary slot */

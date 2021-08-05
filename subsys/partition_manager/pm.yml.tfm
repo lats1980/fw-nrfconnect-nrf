@@ -11,6 +11,7 @@ tfm:
   size: CONFIG_PM_PARTITION_SIZE_TFM
 #ifdef CONFIG_BOOTLOADER_MCUBOOT
   inside: mcuboot_primary_app
+  align: {start: CONFIG_FPROTECT_BLOCK_SIZE}
 #endif
 
 tfm_primary:

@@ -34,9 +34,9 @@
 //     <o> RXD
 #define   RTE_USART0_RXD_PIN            UARTE_PROP(0, rx_pin)
 //     <o> RTS
-#define   RTE_USART0_RTS_PIN            UARTE_PROP(0, rts_pin)
+#define   RTE_USART0_RTS_PIN            0xFFFFFFFF
 //     <o> CTS
-#define   RTE_USART0_CTS_PIN            UARTE_PROP(0, cts_pin)
+#define   RTE_USART0_CTS_PIN            0xFFFFFFFF
 //   </h> Pin Configuration
 
 // <i> Configuration settings for Driver_USART1 in component ::Drivers:USART
