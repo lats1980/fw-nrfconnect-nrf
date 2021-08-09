@@ -5,6 +5,7 @@
  */
 #include <net/socket.h>
 #include <modem/modem_key_mgmt.h>
+#include "slm_native_tls_ps.h"
 #include "slm_native_tls.h"
 
 LOG_MODULE_REGISTER(slm_tls, CONFIG_SLM_LOG_LEVEL);
@@ -29,6 +30,47 @@ nrf_sec_tag_t slm_tls_map_sectag(sec_tag_t sec_tag, uint16_t type)
 }
 
 /**
+ * @brief Write TLS credential to storage
+ */
+int slm_tls_storage_set(sec_tag_t sec_tag, uint16_t type, const void *buf,
+			size_t len)
+{
+	if(IS_ENABLED(CONFIG_SLM_NATIVE_TLS_PS)) {
+		return slm_tls_ps_set(sec_tag, type, buf, len);
+	}
+	
+	return modem_key_mgmt_write(slm_tls_map_sectag(sec_tag, type),
+					    0, buf, len);
+}
+
+/**
+ * @brief Read TLS credential from storage
+ */
+int slm_tls_storage_get(sec_tag_t sec_tag, uint16_t type, void *buf,
+			size_t buf_len, size_t *len)
+{
+	if(IS_ENABLED(CONFIG_SLM_NATIVE_TLS_PS)) {
+		return slm_tls_ps_get(sec_tag, type, buf, buf_len, len);
+	}
+	
+	return modem_key_mgmt_read(slm_tls_map_sectag(sec_tag, type),
+					   0, buf, len);
+}
+
+/**
+ * @brief Remove TLS credential from storage
+ */
+int slm_tls_storage_remove(sec_tag_t sec_tag, uint16_t type)
+{
+	if(IS_ENABLED(CONFIG_SLM_NATIVE_TLS_PS)) {
+		return slm_tls_ps_remove(sec_tag, type);
+	}
+	
+	return modem_key_mgmt_delete(slm_tls_map_sectag(sec_tag, type),
+					     0);
+}
+
+/**
  * @brief Load TLS credentials
  */
 int slm_tls_loadcrdl(sec_tag_t sec_tag)
@@ -49,11 +91,9 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 	memset(crdl, 0, MAX_CRDL_LEN);
 
 	/* Load CA certificate */
-	ret = modem_key_mgmt_read(slm_tls_map_sectag(sec_tag, 0),
-				  0, crdl + offset, &len);
+	ret = slm_tls_storage_get(sec_tag, 0, crdl + offset, len, &len);
 	if (ret == 0) {
-		LOG_DBG("Load CA cert %d: Len: %d",
-			slm_tls_map_sectag(sec_tag, 0), len);
+		LOG_DBG("Load CA cert %d: Len: %d", sec_tag, len);
 		len++;
 		ret = tls_credential_add(sec_tag, TLS_CREDENTIAL_CA_CERTIFICATE,
 					crdl + offset, len);
@@ -65,15 +105,13 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 		len = MAX_CRDL_LEN - offset;
 		loaded = true;
 	} else {
-		LOG_DBG("Empty CA cert at %d:", slm_tls_map_sectag(sec_tag, 0));
+		LOG_DBG("Empty CA cert at %d:", sec_tag);
 	}
 
 	/* Load server/client certificate */
-	ret = modem_key_mgmt_read(slm_tls_map_sectag(sec_tag, 1), 0,
-				  crdl + offset, &len);
+	ret = slm_tls_storage_get(sec_tag, 1, crdl + offset, len, &len);
 	if (ret == 0) {
-		LOG_DBG("Load cert %d. Len: %d",
-			slm_tls_map_sectag(sec_tag, 1), len);
+		LOG_DBG("Load cert %d. Len: %d", sec_tag, len);
 		len++;
 		ret = tls_credential_add(sec_tag,
 					TLS_CREDENTIAL_SERVER_CERTIFICATE,
@@ -86,15 +124,13 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 		len = MAX_CRDL_LEN - offset;
 		loaded = true;
 	} else {
-		LOG_DBG("Empty cert at %d:", slm_tls_map_sectag(sec_tag, 1));
+		LOG_DBG("Empty cert at %d:", sec_tag);
 	}
 
 	/* Load private key */
-	ret = modem_key_mgmt_read(slm_tls_map_sectag(sec_tag, 2), 0,
-				  crdl + offset, &len);
+	ret = slm_tls_storage_get(sec_tag, 2, crdl + offset, len, &len);
 	if (ret == 0) {
-		LOG_DBG("Load private key %d. Len: %d",
-			slm_tls_map_sectag(sec_tag, 2), len);
+		LOG_DBG("Load private key %d. Len: %d", sec_tag, len);
 		len++;
 		ret = tls_credential_add(sec_tag, TLS_CREDENTIAL_PRIVATE_KEY,
 					crdl + offset, len);
@@ -104,8 +140,7 @@ int slm_tls_loadcrdl(sec_tag_t sec_tag)
 		}
 		loaded = true;
 	} else {
-		LOG_DBG("Empty private key at %d:",
-			slm_tls_map_sectag(sec_tag, 2));
+		LOG_DBG("Empty private key at %d:", sec_tag);
 	}
 
 	if (loaded) {
