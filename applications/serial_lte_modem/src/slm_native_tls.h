@@ -48,6 +48,43 @@
 nrf_sec_tag_t slm_tls_map_sectag(sec_tag_t sec_tag, uint16_t type);
 
 /**
+ * @brief Store a TLS credential in storage
+ *
+ * @param[in]  sec_tag security tag of the credential
+ * @param[in]  type TLS credential type, as used in AT%CMNG
+ * @param[in]  buf Buffer containing the credential
+ * @param[in]  len Size of the credential
+ *
+ * @return 0 if successful, negative error code if failure.
+ */
+int slm_tls_storage_set(sec_tag_t sec_tag, uint16_t type, const void *buf,
+			size_t len);
+
+/**
+ * @brief Get a TLS credential from storage
+ *
+ * @param[in]  sec_tag security tag of the credential
+ * @param[in]  type TLS credential type, as used in AT%CMNG
+ * @param[out] buf Buffer in which to write the credential
+ * @param[in]  buf_len Size of the buffer
+ * @param[out] len Size of the credential
+ *
+ * @return 0 if successful, negative error code if failure.
+ */
+int slm_tls_storage_get(sec_tag_t sec_tag, uint16_t type, void *buf,
+			size_t buf_len, size_t *len);
+
+/**
+ * @brief Remove a TLS credential from storage
+ *
+ * @param[in]  sec_tag security tag of the credential
+ * @param[in]  type TLS credential type, as used in AT%CMNG
+ *
+ * @return 0 if successful, negative error code if failure.
+ */
+int slm_tls_storage_remove(sec_tag_t sec_tag, uint16_t type);
+
+/**
  * @brief Load credential
  *
  * @param[in] sec_tag TLS reference
