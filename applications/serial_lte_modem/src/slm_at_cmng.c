@@ -40,6 +40,38 @@ void rsp_send(const uint8_t *str, size_t len);
 extern struct at_param_list at_param_list;
 extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 
+/**@brief handle AT%CMNG commands
+ *  AT%CMNG=<opcode>[,<sec_tag>[,<type>[,<content>]]]
+ *  AT%CMNG? READ command not supported
+ *  AT%CMNG=? READ command not supported
+ */
+int handle_at_cmng(enum at_cmd_type cmd_type)
+{
+	int err = -ENOENT;
+	nrf_sec_tag_t sec_tag;
+
+	switch (cmd_type) {
+	case AT_CMD_TYPE_SET_COMMAND:
+		if (at_params_valid_count_get(&at_param_list) >= 3) {
+			err = at_params_unsigned_int_get(&at_param_list, 2, &sec_tag);
+			if (err < 0) {
+				LOG_ERR("Fail to get op parameter: %d", err);
+				return err;
+			}
+			if (sec_tag > MAX_SLM_SEC_TAG) {
+				LOG_ERR("Invalid security tag: %d", sec_tag);
+				return -EINVAL;
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	return err;
+}
+
 /**@brief handle AT#XCMNG commands
  *  AT#XCMNG=<opcode>[,<sec_tag>[,<type>[,<content>]]]
  *  AT#XCMNG? READ command not supported

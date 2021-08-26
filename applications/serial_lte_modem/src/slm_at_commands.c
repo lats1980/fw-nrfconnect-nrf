@@ -392,6 +392,7 @@ int handle_at_recvfrom(enum at_cmd_type cmd_type);
 int handle_at_getaddrinfo(enum at_cmd_type cmd_type);
 
 #if defined(CONFIG_SLM_NATIVE_TLS)
+int handle_at_cmng(enum at_cmd_type cmd_type);
 int handle_at_xcmng(enum at_cmd_type cmd_type);
 #endif
 
@@ -486,8 +487,10 @@ static struct slm_at_cmd {
 	{"AT#XGETADDRINFO", handle_at_getaddrinfo},
 
 #if defined(CONFIG_SLM_NATIVE_TLS)
-	/* Hijacked modem command */
-	{"AT%CMNG", handle_at_xcmng},
+	/* Hijacked Modem TLS cmng command */
+	{"AT%CMNG", handle_at_cmng},
+	/* Native TLS cmng command */
+	{"AT#XCMNG", handle_at_xcmng},
 #endif
 	/* ICMP commands */
 	{"AT#XPING", handle_at_icmp_ping},
