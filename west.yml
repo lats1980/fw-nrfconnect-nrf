@@ -116,8 +116,9 @@ manifest:
       path: bootloader/mcuboot
     - name: nrfxlib
       repo-path: sdk-nrfxlib
+      remote: lats1980
       path: nrfxlib
-      revision: v1.6.0
+      revision: v1.6.0-customized
     - name: trusted-firmware-m
       repo-path: sdk-trusted-firmware-m
       path: modules/tee/tfm
