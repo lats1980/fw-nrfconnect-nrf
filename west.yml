@@ -121,8 +121,9 @@ manifest:
       revision: v1.6.0-customized
     - name: trusted-firmware-m
       repo-path: sdk-trusted-firmware-m
+      remote: lats1980
       path: modules/tee/tfm
-      revision: v1.3.99-ncs1
+      revision: v1.3.99-ncs1-customized
     - name: tfm-mcuboot # This is used by the trusted-firmware-m module.
       repo-path: sdk-mcuboot
       path: modules/tee/tfm-mcuboot
