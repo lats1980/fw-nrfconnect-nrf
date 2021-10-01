@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <net/socket.h>
+#include <net/socket_offload.h>
 #include <sys/ring_buffer.h>
 #include "slm_util.h"
 #include "slm_native_tls.h"
@@ -154,9 +155,9 @@ static int do_tcp_server_start(uint16_t port)
 #endif
 	/* Open socket */
 	if (proxy.sec_tag == INVALID_SEC_TAG) {
-		proxy.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		proxy.sock = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE, IPPROTO_TCP);
 	} else {
-		proxy.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
+		proxy.sock = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE, IPPROTO_TLS_1_2);
 	}
 	if (proxy.sock < 0) {
 		LOG_ERR("socket() failed: %d", -errno);

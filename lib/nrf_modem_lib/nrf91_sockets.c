@@ -1305,15 +1305,6 @@ static bool nrf91_socket_is_supported(int family, int type, int proto)
 		return false;
 	}
 
-	if (IS_ENABLED(CONFIG_NET_SOCKETS_OFFLOAD_TLS)) {
-		return true;
-	}
-
-	if ((proto >= IPPROTO_TLS_1_0 && proto <= IPPROTO_TLS_1_2) ||
-	    (proto >= IPPROTO_DTLS_1_0 && proto <= IPPROTO_DTLS_1_2)) {
-		return false;
-	}
-
 	return true;
 }
 
@@ -1347,7 +1338,7 @@ static int nrf91_socket_create(int family, int type, int proto)
 	return fd;
 }
 
-NET_SOCKET_REGISTER(nrf91_socket, AF_UNSPEC, nrf91_socket_is_supported,
+NET_SOCKET_OFFLOADED_REGISTER(nrf91_socket, AF_UNSPEC, nrf91_socket_is_supported,
 		    nrf91_socket_create);
 
 /* Create a network interface for nRF91 */
