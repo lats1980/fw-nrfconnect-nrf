@@ -30,7 +30,6 @@ LOG_MODULE_REGISTER(tcpip, CONFIG_SLM_LOG_LEVEL);
  * - IP Protocol other than TCP(6) and UDP(17)
  * - TCP server accept one connection only
  * - Receive more than IPv4 MTU one-time
- * - IPv6 support
  * - does not support proxy
  */
 
@@ -38,6 +37,7 @@ LOG_MODULE_REGISTER(tcpip, CONFIG_SLM_LOG_LEVEL);
 enum slm_socket_operation {
 	AT_SOCKET_CLOSE,
 	AT_SOCKET_OPEN,
+	AT_SOCKET_OPEN6
 };
 
 /**@brief Socketopt operations. */
@@ -53,6 +53,7 @@ enum slm_socket_role {
 };
 
 static struct sockaddr_in remote;
+static struct sockaddr_in6 remotev6;
 
 static struct tcpip_client {
 	int sock; /* Socket descriptor. */
@@ -60,7 +61,9 @@ static struct tcpip_client {
 	int role; /* Client or Server role */
 	int sock_peer; /* Socket descriptor for peer. */
 	int ip_proto; /* IP protocol */
+	uint16_t type;     /* SOCK_STREAM or SOCK_DGRAM */
 	bool connected; /* TCP connected flag */
+	int family;        /* Socket address family */
 } client;
 
 /* global functions defined in different files */
@@ -68,87 +71,36 @@ void rsp_send(const uint8_t *str, size_t len);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
-extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
-
-/**@brief Resolves host IPv4 address and port
- */
-static int parse_host_by_ipv4(const char *ip, uint16_t port)
-{
-	struct sockaddr_in *address4 = ((struct sockaddr_in *)&remote);
-
-	address4->sin_family = AF_INET;
-	address4->sin_port = htons(port);
-	LOG_DBG("IPv4 Address %s", log_strdup(ip));
-	/* NOTE inet_pton() returns 1 as success */
-	if (inet_pton(AF_INET, ip, &address4->sin_addr) == 1) {
-		return 0;
-	} else {
-		return -EINVAL;
-	}
-}
-
-static int parse_host_by_name(const char *name, uint16_t port, int socktype)
-{
-	int err;
-	struct addrinfo *result;
-	struct addrinfo hints = {
-		.ai_family = AF_INET,
-		.ai_socktype = socktype
-	};
-	char ipv4_addr[NET_IPV4_ADDR_LEN];
-
-	err = getaddrinfo(name, NULL, &hints, &result);
-	if (err) {
-		LOG_ERR("ERROR: getaddrinfo failed %d", err);
-		return err;
-	}
-
-	if (result == NULL) {
-		LOG_ERR("ERROR: Address not found\n");
-		return -ENOENT;
-	}
-
-	/* IPv4 Address. */
-	struct sockaddr_in *server4 = ((struct sockaddr_in *)&remote);
-
-	server4->sin_addr.s_addr =
-		((struct sockaddr_in *)result->ai_addr)->sin_addr.s_addr;
-	server4->sin_family = AF_INET;
-	server4->sin_port = htons(port);
-
-	inet_ntop(AF_INET, &server4->sin_addr.s_addr, ipv4_addr,
-		  sizeof(ipv4_addr));
-	LOG_DBG("IPv4 Address found %s\n", log_strdup(ipv4_addr));
-
-	/* Free the address. */
-	freeaddrinfo(result);
-
-	return 0;
-}
 
 static int do_socket_open(uint8_t type, uint8_t role, int sec_tag)
 {
 	int ret = 0;
+	int proto = IPPROTO_TCP;
 
+	if (client.sock != INVALID_SOCKET) {
+		LOG_WRN("Socket is already opened");
+		return -EINVAL;
+	}
 	client.sec_tag = sec_tag;
 	if (type == SOCK_STREAM) {
 		if (sec_tag == INVALID_SEC_TAG) {
-			client.sock = socket(AF_INET, SOCK_STREAM,
+			client.sock = socket(client.family, SOCK_STREAM,
 					SLM_IPPROTO_TCP);
 			client.ip_proto = SLM_IPPROTO_TCP;
 		} else {
-			client.sock = socket(AF_INET, SOCK_STREAM,
+			client.sock = socket(client.family, SOCK_STREAM,
 					SLM_IPPROTO_TLS_1_2);
 			client.ip_proto = SLM_IPPROTO_TLS_1_2;
 		}
 	} else if (type == SOCK_DGRAM) {
 		if (sec_tag == INVALID_SEC_TAG) {
-			client.sock = socket(AF_INET, SOCK_DGRAM,
+			client.sock = socket(client.family, SOCK_DGRAM,
 					SLM_IPPROTO_UDP);
 			client.ip_proto = SLM_IPPROTO_UDP;
 		} else {
-			client.sock = socket(AF_INET, SOCK_DGRAM,
+			client.sock = socket(client.family, SOCK_DGRAM,
 					SLM_IPPROTO_DTLS_1_2);
 			client.ip_proto = SLM_IPPROTO_DTLS_1_2;
 		}
@@ -174,6 +126,7 @@ static int do_socket_open(uint8_t type, uint8_t role, int sec_tag)
 		}
 
 		/* Set up default TLS peer verification */
+
 		if (role == AT_SOCKET_ROLE_SERVER) {
 			verify = TLS_PEER_VERIFY_NONE;
 		} else {
@@ -195,7 +148,6 @@ static int do_socket_open(uint8_t type, uint8_t role, int sec_tag)
 			goto error_exit;
 		}
 #endif
-
 		ret = setsockopt(client.sock, SOL_TLS, TLS_SEC_TAG_LIST,
 				sec_tag_list, sizeof(sec_tag_t));
 		if (ret) {
@@ -226,6 +178,9 @@ static int do_socket_close(int error)
 {
 	int ret = 0;
 
+	if (client.sock == INVALID_SOCKET) {
+		return 0;
+	}
 	if (client.sock > 0) {
 #if defined(CONFIG_SLM_NATIVE_TLS)
 		if (client.sec_tag != INVALID_SEC_TAG) {
@@ -253,74 +208,214 @@ static int do_socket_close(int error)
 	return ret;
 }
 
-static int do_socketopt_set(int name, int value)
+static int do_socketopt_set_str(int option, const char *value)
 {
 	int ret = -ENOTSUP;
 
-	switch (name) {
-	case SO_REUSEADDR:	/* Ignored by Zephyr */
-	case SO_ERROR:		/* Ignored by Zephyr */
-		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"ignored\"\r\n");
-		rsp_send(rsp_buf, strlen(rsp_buf));
-		ret = 0;
+	switch (option) {
+	case SO_BINDTODEVICE:
+		ret = setsockopt(client.sock, SOL_SOCKET, option, value, strlen(value));
+		if (ret < 0) {
+			LOG_ERR("setsockopt(%d) error: %d", option, -errno);
+		}
 		break;
 
-	case SO_RCVTIMEO: {
-		struct timeval tmo = { .tv_sec = value };
-
-		ret = setsockopt(client.sock, SOL_SOCKET, SO_RCVTIMEO,
-				&tmo, sizeof(struct timeval));
-		if (ret < 0) {
-			LOG_ERR("setsockopt() error: %d", -errno);
-		}
-	} break;
-
-	case SO_BINDTODEVICE:	/* Not supported by SLM for now */
-	case SO_TIMESTAMPING:	/* Not supported by SLM for now */
-	case SO_TXTIME:		/* Not supported by SLM for now */
-	case SO_SOCKS5:		/* Not supported by SLM for now */
 	default:
-		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"not supported\"\r\n");
-		rsp_send(rsp_buf, strlen(rsp_buf));
+		LOG_WRN("Unknown option %d", option);
 		break;
 	}
 
 	return ret;
 }
 
-static int do_socketopt_get(int name)
+static int do_socketopt_set_int(int option, int value)
 {
-	int ret = 0;
+	int ret = -ENOTSUP;
 
-	switch (name) {
-	case SO_REUSEADDR:	/* Ignored by Zephyr */
-	case SO_ERROR:		/* Ignored by Zephyr */
-		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"ignored\"\r\n");
+	switch (option) {
+	case SO_REUSEADDR:
+		ret = setsockopt(client.sock, SOL_SOCKET, option, &value, sizeof(int));
+		if (ret < 0) {
+			LOG_ERR("setsockopt(%d) error: %d", option, -errno);
+		}
+		break;
+
+	case SO_RCVTIMEO:
+	case SO_SNDTIMEO: {
+		struct timeval tmo = { .tv_sec = value };
+		socklen_t len = sizeof(struct timeval);
+
+		ret = setsockopt(client.sock, SOL_SOCKET, option, &tmo, len);
+		if (ret < 0) {
+			LOG_ERR("setsockopt(%d) error: %d", option, -errno);
+		}
+	} break;
+
+	/** NCS extended socket options */
+	case SO_SILENCE_ALL:
+	case SO_IP_ECHO_REPLY:
+	case SO_IPV6_ECHO_REPLY:
+	case SO_TCP_SRV_SESSTIMEO:
+		ret = setsockopt(client.sock, SOL_SOCKET, option, &value, sizeof(int));
+		if (ret < 0) {
+			LOG_ERR("setsockopt(%d) error: %d", option, -errno);
+		}
+		break;
+
+	/* RAI-related */
+	case SO_RAI_LAST:
+	case SO_RAI_NO_DATA:
+	case SO_RAI_ONE_RESP:
+	case SO_RAI_ONGOING:
+	case SO_RAI_WAIT_MORE:
+		ret = setsockopt(client.sock, SOL_SOCKET, option, NULL, 0);
+		if (ret < 0) {
+			LOG_ERR("setsockopt(%d) error: %d", option, -errno);
+		}
+		break;
+
+
+	case SO_PRIORITY:
+	case SO_TIMESTAMPING:
+		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"not supported\"\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		break;
 
-	case SO_RCVTIMEO: {
-		struct timeval tmo;
-		socklen_t len = sizeof(struct timeval);
+	default:
+		LOG_WRN("Unknown option %d", option);
+		break;
+	}
 
-		ret = getsockopt(client.sock, SOL_SOCKET, SO_RCVTIMEO,
-				&tmo, &len);
+	return ret;
+}
+
+static int do_socketopt_get(int option)
+{
+	int ret = 0;
+
+	switch (option) {
+	case SO_SILENCE_ALL:
+	case SO_IP_ECHO_REPLY:
+	case SO_IPV6_ECHO_REPLY:
+	case SO_TCP_SRV_SESSTIMEO:
+	case SO_ERROR: {
+		int value;
+		socklen_t len = sizeof(int);
+
+		ret = getsockopt(client.sock, SOL_SOCKET, option, &value, &len);
 		if (ret) {
-			LOG_ERR("getsockopt() error: %d", -errno);
+			LOG_ERR("getsockopt(%d) error: %d", option, -errno);
 		} else {
-			sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"%d sec\"\r\n",
-				(int)tmo.tv_sec);
+			sprintf(rsp_buf, "\r\n#XSOCKETOPT: %d\r\n", value);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
 	} break;
 
-	case SO_BINDTODEVICE:	/* Not supported by SLM for now */
-	case SO_TIMESTAMPING:	/* Not supported by SLM for now */
-	case SO_TXTIME:		/* Not supported by SLM for now */
-	case SO_SOCKS5:		/* Not supported by SLM for now */
-	default:
+	case SO_RCVTIMEO:
+	case SO_SNDTIMEO: {
+		struct timeval tmo;
+		socklen_t len = sizeof(struct timeval);
+
+		ret = getsockopt(client.sock, SOL_SOCKET, option, &tmo, &len);
+		if (ret) {
+			LOG_ERR("getsockopt(%d) error: %d", option, -errno);
+		} else {
+			sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"%d sec\"\r\n", (int)tmo.tv_sec);
+			rsp_send(rsp_buf, strlen(rsp_buf));
+		}
+	} break;
+
+	case SO_TYPE:
+	case SO_PRIORITY:
+	case SO_PROTOCOL:
 		sprintf(rsp_buf, "\r\n#XSOCKETOPT: \"not supported\"\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
+		break;
+
+	default:
+		LOG_WRN("Unknown option %d", option);
+		break;
+	}
+
+	return ret;
+}
+static int do_secure_socketopt_set_str(int option, const char *value)
+{
+	int ret = -ENOTSUP;
+
+	switch (option) {
+	case TLS_HOSTNAME:
+		/** Write-only socket option to set hostname. It accepts a string containing
+		 *  the hostname (may be NULL to disable hostname verification).
+		 */
+		if (value) {
+			ret = setsockopt(client.sock, SOL_TLS, option, value, strlen(value));
+		} else {
+			ret = setsockopt(client.sock, SOL_TLS, option, NULL, 0);
+		}
+		if (ret < 0) {
+			LOG_ERR("setsockopt(%d) error: %d", option, -errno);
+		}
+		break;
+
+	default:
+		LOG_WRN("Unknown option %d", option);
+		break;
+	}
+
+	return ret;
+}
+
+static int do_secure_socketopt_set_int(int option, int value)
+{
+	int ret = -ENOTSUP;
+
+	switch (option) {
+	case TLS_PEER_VERIFY:
+	case TLS_SESSION_CACHE:
+	case TLS_SESSION_CACHE_PURGE:
+	case TLS_DTLS_HANDSHAKE_TIMEO:
+		ret = setsockopt(client.sock, SOL_TLS, option, &value, sizeof(int));
+		if (ret < 0) {
+			LOG_ERR("setsockopt(%d) error: %d", option, -errno);
+		}
+		break;
+
+	case TLS_DTLS_HANDSHAKE_TIMEOUT_MIN:
+	case TLS_DTLS_HANDSHAKE_TIMEOUT_MAX:
+	case TLS_CIPHERSUITE_LIST:
+	case TLS_ALPN_LIST:
+		sprintf(rsp_buf, "\r\n#XSSOCKETOPT: \"not supported\"\r\n");
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		break;
+
+	default:
+		LOG_WRN("Unknown option %d", option);
+		break;
+	}
+
+	return ret;
+}
+
+static int do_secure_socketopt_get(int option)
+{
+	int ret = 0;
+
+	switch (option) {
+	case TLS_CIPHERSUITE_USED: {
+		int value;
+		socklen_t len = sizeof(int);
+
+		ret = getsockopt(client.sock, SOL_SOCKET, option, &value, &len);
+		if (ret) {
+			LOG_ERR("getsockopt(%d) error: %d", option, -errno);
+		} else {
+			sprintf(rsp_buf, "\r\n#XSSOCKETOPT: %d\r\n", value);
+			rsp_send(rsp_buf, strlen(rsp_buf));
+		}
+	} break;
+
+	default:
 		break;
 	}
 
@@ -330,40 +425,58 @@ static int do_socketopt_get(int name)
 static int do_bind(uint16_t port)
 {
 	int ret;
-	struct sockaddr_in local;
-	int addr_len;
-	char ipv4_addr[NET_IPV4_ADDR_LEN];
 
-	local.sin_family = AF_INET;
-	local.sin_port = htons(port);
+	if (client.family == AF_INET) {
+		char ipv4_addr[INET_ADDRSTRLEN] = {0};
 
-	if (!util_get_ipv4_addr(ipv4_addr)) {
-		LOG_ERR("Unable to obtain local IPv4 address");
-		return -1;
-	}
-	/* Check network connection status by checking local IP address */
-	addr_len = strlen(ipv4_addr);
-	if (addr_len == 0) {
-		LOG_ERR("LTE not connected yet");
-		return -1;
-	}
-	if (!check_for_ipv4(ipv4_addr, addr_len)) {
-		LOG_ERR("Invalid local address");
-		return -1;
-	}
+		util_get_ip_addr(ipv4_addr, NULL);
+		if (strlen(ipv4_addr) == 0) {
+			LOG_ERR("Get local IPv4 address failed");
+			return -EINVAL;
+		}
 
-	/* NOTE inet_pton() returns 1 as success */
-	if (inet_pton(AF_INET, ipv4_addr, &local.sin_addr) != 1) {
-		LOG_ERR("Parse local IP address failed: %d", -errno);
+		struct sockaddr_in local = {
+			.sin_family = AF_INET,
+			.sin_port = htons(port)
+		};
+
+		if (inet_pton(AF_INET, ipv4_addr, &local.sin_addr) != 1) {
+			LOG_ERR("Parse local IPv4 address failed: %d", -errno);
+			return -EAGAIN;
+		}
+
+		ret = bind(client.sock, (struct sockaddr *)&local, sizeof(struct sockaddr_in));
+		if (ret) {
+			LOG_ERR("bind() failed: %d", -errno);
+			return -errno;
+		}
+		LOG_DBG("bind to %s", log_strdup(ipv4_addr));
+	} else if (client.family == AF_INET6) {
+		char ipv6_addr[INET6_ADDRSTRLEN] = {0};
+
+		util_get_ip_addr(NULL, ipv6_addr);
+		if (strlen(ipv6_addr) == 0) {
+			LOG_ERR("Get local IPv6 address failed");
+			return -EINVAL;
+		}
+
+		struct sockaddr_in6 local = {
+			.sin6_family = AF_INET6,
+			.sin6_port = htons(port)
+		};
+
+		if (inet_pton(AF_INET6, ipv6_addr, &local.sin6_addr) != 1) {
+			LOG_ERR("Parse local IPv6 address failed: %d", -errno);
+			return -EAGAIN;
+		}
+		ret = bind(client.sock, (struct sockaddr *)&local, sizeof(struct sockaddr_in6));
+		if (ret) {
+			LOG_ERR("bind() failed: %d", -errno);
+			return -errno;
+		}
+		LOG_DBG("bind to %s", log_strdup(ipv6_addr));
+	} else {
 		return -EINVAL;
-	}
-
-	ret = bind(client.sock, (struct sockaddr *)&local,
-		 sizeof(struct sockaddr_in));
-	if (ret) {
-		LOG_ERR("bind() failed: %d", -errno);
-		do_socket_close(-errno);
-		return -errno;
 	}
 
 	return 0;
@@ -372,17 +485,16 @@ static int do_bind(uint16_t port)
 static int do_connect(const char *url, uint16_t port)
 {
 	int ret = 0;
+	struct sockaddr sa = {
+		.sa_family = AF_UNSPEC
+	};
 
-	LOG_DBG("%s:%d", log_strdup(url), port);
+	LOG_DBG("connect %s:%d", log_strdup(url), port);
 
-	if (check_for_ipv4(url, strlen(url))) {
-		ret = parse_host_by_ipv4(url, port);
-	} else {
-		ret = parse_host_by_name(url, port, SOCK_STREAM);
-	}
+	ret = util_resolve_host(0, url, port, client.family, &sa);
 	if (ret) {
-		LOG_ERR("Parse failed: %d", ret);
-		return ret;
+		LOG_ERR("getaddrinfo() error: %s", log_strdup(gai_strerror(ret)));
+		return -EAGAIN;
 	}
 
 	if (client.sec_tag != INVALID_SEC_TAG) {
@@ -394,9 +506,13 @@ static int do_connect(const char *url, uint16_t port)
 		}
 	}
 
-	ret = connect(client.sock, (struct sockaddr *)&remote, sizeof(struct sockaddr_in));
-	if (ret < 0) {
-		LOG_ERR("connect() failed: %d", -errno);
+	if (sa.sa_family == AF_INET) {
+		ret = connect(client.sock, &sa, sizeof(struct sockaddr_in));
+	} else {
+		ret = connect(client.sock, &sa, sizeof(struct sockaddr_in6));
+	}
+	if (ret) {
+		LOG_ERR("connect() error: %d", -errno);
 		do_socket_close(-errno);
 		return -errno;
 	}
@@ -404,7 +520,9 @@ static int do_connect(const char *url, uint16_t port)
 	client.connected = true;
 	sprintf(rsp_buf, "\r\n#XCONNECT: 1\r\n");
 	rsp_send(rsp_buf, strlen(rsp_buf));
+
 	return ret;
+
 }
 
 static int do_listen(void)
@@ -425,26 +543,47 @@ static int do_listen(void)
 
 static int do_accept(void)
 {
-	int fd;
-	char peer_addr[INET_ADDRSTRLEN];
+	int ret;
+	char peer_addr[INET6_ADDRSTRLEN] = {0};
 	socklen_t len = sizeof(struct sockaddr_in);
 
-	fd = accept(client.sock, (struct sockaddr *)&remote, &len);
-	if (fd == -1) {
-		LOG_ERR("accept() failed: %d", -errno);
-		do_socket_close(-errno);
-		return -errno;
+	if (client.family == AF_INET) {
+		struct sockaddr_in sockclient;
+		socklen_t len = sizeof(struct sockaddr_in);
+
+		ret = accept(client.sock, (struct sockaddr *)&sockclient, &len);
+		if (ret == -1) {
+			LOG_ERR("accept() error: %d", -errno);
+			client.sock_peer = INVALID_SOCKET;
+			return -errno;
+		}
+		client.sock_peer = ret;
+		ret = inet_ntop(AF_INET, &sockclient.sin_addr, peer_addr, sizeof(peer_addr));
 	}
-	if (inet_ntop(AF_INET, &remote.sin_addr, peer_addr, INET_ADDRSTRLEN)
-		== NULL) {
+	else if (client.family == AF_INET6) {
+		struct sockaddr_in6 sockclient;
+		socklen_t len = sizeof(struct sockaddr_in6);
+
+		ret = accept(client.sock, (struct sockaddr *)&sockclient, &len);
+		if (ret == -1) {
+			LOG_ERR("accept() error: %d", -errno);
+			client.sock_peer = INVALID_SOCKET;
+			return -errno;
+		}
+		client.sock_peer = ret;
+		ret = inet_ntop(AF_INET6, &sockclient.sin6_addr, peer_addr, sizeof(peer_addr));
+	} else {
+		return -EINVAL;
+	}
+
+	if (ret == NULL) {
 		LOG_WRN("Parse peer IP address failed: %d", -errno);
-		close(fd);
+		close(client.sock);
 		return -EINVAL;
 	}
 	sprintf(rsp_buf, "\r\n#XACCEPT: \"connected with %s\"\r\n",
 		peer_addr);
 	rsp_send(rsp_buf, strlen(rsp_buf));
-	client.sock_peer = fd;
 	client.connected = true;
 
 	sprintf(rsp_buf, "\r\n#XACCEPT: %d\r\n", client.sock_peer);
@@ -459,7 +598,7 @@ static int do_send(const uint8_t *data, int datalen)
 	int ret = 0;
 	int sock = client.sock;
 
-	/* For TCP/TLS Server, send to imcoming socket */
+	/* For TCP/TLS Server, send to incoming socket */
 	if (client.role == AT_SOCKET_ROLE_SERVER) {
 		if (client.sock_peer != INVALID_SOCKET) {
 			sock = client.sock_peer;
@@ -491,12 +630,24 @@ static int do_send(const uint8_t *data, int datalen)
 	LOG_DBG("Sent");
 	if (ret >= 0) {
 #if defined(CONFIG_SLM_UI)
-		if (ret < NET_IPV4_MTU/3) {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-		} else if (ret < 2*NET_IPV4_MTU/3) {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		if(client.family == AF_INET)
+		{
+			if (ret < NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (ret < 2*NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
 		} else {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			if (ret < NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (ret < 2*NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
+
 		}
 #endif
 		return 0;
@@ -542,12 +693,22 @@ static int do_recv(uint16_t length)
 		LOG_WRN("recv() return 0");
 	}
 #if defined(CONFIG_SLM_UI)
-	if (ret < NET_IPV4_MTU/3) {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-	} else if (ret < 2*NET_IPV4_MTU/3) {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+	if(client.family == AF_INET) {
+		if (ret < NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (ret < 2*NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
 	} else {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		if (ret < NET_IPV6_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (ret < 2*NET_IPV6_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}		
 	}
 #endif
 	if (slm_util_hex_check(rx_data, ret)) {
@@ -577,15 +738,32 @@ static int do_recv(uint16_t length)
 static int do_udp_init(const char *url, uint16_t port)
 {
 	int ret;
+	struct sockaddr sa = {
+		.sa_family = AF_UNSPEC
+	};
 
-	if (check_for_ipv4(url, strlen(url))) {
-		ret = parse_host_by_ipv4(url, port);
-	} else {
-		ret = parse_host_by_name(url, port, SOCK_DGRAM);
-	}
+	/* check address */
+	ret = util_resolve_host(0, url, port, client.family, &sa);
 	if (ret) {
-		LOG_ERR("Parse failed: %d", ret);
-		return ret;
+		LOG_ERR("getaddrinfo() error: %s", log_strdup(gai_strerror(ret)));
+		return -EAGAIN;
+	}
+
+	if(sa.sa_family == AF_INET)
+	{
+		struct sockaddr_in *address4 = ((struct sockaddr_in *)&remote) ;
+
+		address4->sin_family = AF_INET;
+		address4->sin_port = htons(port);
+		LOG_DBG("IPv4 Address %s", log_strdup(url));
+
+	} else if(sa.sa_family == AF_INET6) {
+		struct sockaddr_in6 *address6 = ((struct sockaddr_in *)&remotev6) ;
+
+		address6->sin6_family = AF_INET6;
+		address6->sin6_port = htons(port);
+		LOG_DBG("IPv6 Address %s", log_strdup(url));
+	
 	}
 
 	LOG_DBG("UDP initialized");
@@ -596,26 +774,41 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 		int datalen)
 {
 	uint32_t offset = 0;
-	int ret;
+	int ret = 0;
+	struct sockaddr sa = {
+		.sa_family = AF_UNSPEC
+	};
 
 	ret = do_udp_init(url, port);
 	if (ret < 0) {
 		return ret;
 	}
 
+	LOG_DBG("sendto %s:%d", log_strdup(url), port);
+
+	ret = util_resolve_host(0, url, port, client.family, &sa);
+	if (ret) {
+		LOG_ERR("getaddrinfo() error: %s", log_strdup(gai_strerror(ret)));
+		return -EAGAIN;
+	}
+
 	while (offset < datalen) {
-		ret = sendto(client.sock, data + offset,
-			datalen - offset, 0,
-			(struct sockaddr *)&remote,
-			sizeof(struct sockaddr_in));
+
+		if (sa.sa_family == AF_INET) {
+			ret = sendto(client.sock, data + offset, datalen - offset, 0,
+				&sa, sizeof(struct sockaddr_in));
+		} else {
+			ret = sendto(client.sock, data + offset, datalen - offset, 0,
+				&sa, sizeof(struct sockaddr_in6));
+		}
 		if (ret <= 0) {
-			LOG_ERR("sendto() failed: %d", -errno);
+			LOG_ERR("sendto() failed: %d, sent: %d", -errno, offset);
 			if (errno != EAGAIN && errno != ETIMEDOUT) {
 				do_socket_close(-errno);
 			} else {
 				sprintf(rsp_buf, "\r\n#XSOCKET: %d\r\n", -errno);
 				rsp_send(rsp_buf, strlen(rsp_buf));
-			}
+			}			
 			ret = -errno;
 			break;
 		}
@@ -628,6 +821,7 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 	LOG_DBG("UDP sent");
 	if (ret >= 0) {
 #if defined(CONFIG_SLM_UI)
+	if(client.family == AF_INET) {
 		if (ret < NET_IPV4_MTU/3) {
 			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
 		} else if (ret < 2*NET_IPV4_MTU/3) {
@@ -635,6 +829,15 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 		} else {
 			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
 		}
+	} else {
+		if (ret < NET_IPV6_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (ret < 2*NET_IPV6_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
+	}	
 #endif
 		return 0;
 	} else {
@@ -661,12 +864,22 @@ static int do_recvfrom(uint16_t length)
 		return -errno;
 	}
 #if defined(CONFIG_SLM_UI)
-	if (ret < NET_IPV4_MTU/3) {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-	} else if (ret < 2*NET_IPV4_MTU/3) {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+	if(client.family == AF_INET) {
+		if (ret < NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (ret < 2*NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
 	} else {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		if (ret < NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (ret < 2*NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}		
 	}
 #endif
 	/**
@@ -707,7 +920,6 @@ int handle_at_socket(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t op;
-	uint16_t role;
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
@@ -715,27 +927,27 @@ int handle_at_socket(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		if (op == AT_SOCKET_OPEN) {
+		if (op == AT_SOCKET_OPEN || op == AT_SOCKET_OPEN6) {
 			uint16_t type;
-			sec_tag_t sec_tag;
 
-			err = at_params_unsigned_short_get(&at_param_list, 2, &type);
+			err = at_params_unsigned_short_get(&at_param_list, 2, &client.type);
 			if (err) {
 				return err;
 			}
-			err = at_params_unsigned_short_get(&at_param_list, 3, &role);
+			err = at_params_unsigned_short_get(&at_param_list, 3, &client.role);
 			if (err) {
 				return err;
 			}
-			err = at_params_unsigned_int_get(&at_param_list, 4, &sec_tag);
+			err = at_params_unsigned_int_get(&at_param_list, 4, &client.sec_tag);
 			if (err) {
-				sec_tag = INVALID_SEC_TAG;
+				client.sec_tag = INVALID_SEC_TAG;
 			}
 			if (client.sock > 0) {
 				LOG_WRN("Socket is already opened");
 				return -EINVAL;
 			} else {
-				err = do_socket_open(type, role, sec_tag);
+				client.family = (op == AT_SOCKET_OPEN) ? AF_INET : AF_INET6;
+				err = do_socket_open(client.type, client.role, client.sec_tag);
 			}
 		} else if (op == AT_SOCKET_CLOSE) {
 			if (client.sock < 0) {
@@ -748,8 +960,8 @@ int handle_at_socket(enum at_cmd_type cmd_type)
 
 	case AT_CMD_TYPE_READ_COMMAND:
 		if (client.sock != INVALID_SOCKET) {
-			sprintf(rsp_buf, "\r\n#XSOCKET: %d,%d,%d\r\n",
-				client.sock, client.ip_proto, client.role);
+			sprintf(rsp_buf, "\r\n#XSOCKET: %d,%d,%d,%d\r\n",
+				client.sock, client.ip_proto, client.role, client.family);
 		} else {
 			sprintf(rsp_buf, "\r\n#XSOCKET: 0\r\n");
 		}
@@ -758,8 +970,8 @@ int handle_at_socket(enum at_cmd_type cmd_type)
 		break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "\r\n#XSOCKET: (%d,%d),(%d,%d),(%d,%d)",
-			AT_SOCKET_CLOSE, AT_SOCKET_OPEN,
+		sprintf(rsp_buf, "\r\n#XSOCKET: (%d,%d,%d),(%d,%d),(%d,%d)",
+			AT_SOCKET_CLOSE, AT_SOCKET_OPEN, AT_SOCKET_OPEN6,
 			SOCK_STREAM, SOCK_DGRAM,
 			AT_SOCKET_ROLE_CLIENT, AT_SOCKET_ROLE_SERVER);
 		rsp_send(rsp_buf, strlen(rsp_buf));
@@ -785,15 +997,12 @@ int handle_at_socketopt(enum at_cmd_type cmd_type)
 	int err = -EINVAL;
 	uint16_t op;
 	uint16_t name;
+	enum at_param_type type = AT_PARAM_TYPE_NUM_INT;
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
 		if (client.sock < 0) {
 			LOG_ERR("Socket not opened yet");
-			return err;
-		}
-		if (client.role != AT_SOCKET_ROLE_CLIENT) {
-			LOG_ERR("Invalid role");
 			return err;
 		}
 		err = at_params_unsigned_short_get(&at_param_list, 1, &op);
@@ -805,13 +1014,31 @@ int handle_at_socketopt(enum at_cmd_type cmd_type)
 			return err;
 		}
 		if (op == AT_SOCKETOPT_SET) {
-			int value;
+			int value_int  = 0;
+			char value_str[IFNAMSIZ] = {0};
+			int size = IFNAMSIZ;
 
-			err = at_params_int_get(&at_param_list, 3, &value);
-			if (err) {
-				return err;
+			if (at_params_valid_count_get(&at_param_list) > 3) {
+				type = at_params_type_get(&at_param_list, 3);
+				if (type == AT_PARAM_TYPE_NUM_INT) {
+					err = at_params_int_get(&at_param_list, 3, &value_int);
+					if (err) {
+						return err;
+					}
+				} else if (type == AT_PARAM_TYPE_STRING) {
+					err = util_string_get(&at_param_list, 3, value_str, &size);
+					if (err) {
+						return err;
+					}
+				} else {
+					return -EINVAL;
+				}
 			}
-			err = do_socketopt_set(name, value);
+			if (type == AT_PARAM_TYPE_NUM_INT) {
+				err = do_socketopt_set_int(name, value_int);
+			} else if (type == AT_PARAM_TYPE_STRING) {
+				err = do_socketopt_set_str(name, value_str);
+			}
 		} else if (op == AT_SOCKETOPT_GET) {
 			err = do_socketopt_get(name);
 		} break;
@@ -829,7 +1056,77 @@ int handle_at_socketopt(enum at_cmd_type cmd_type)
 
 	return err;
 }
+/**@brief handle AT#XSSOCKETOPT commands
+ *  AT#XSSOCKETOPT=<op>,<name>[,<value>]
+ *  AT#XSSOCKETOPT? READ command not supported
+ *  AT#XSSOCKETOPT=?
+ */
+int handle_at_secure_socketopt(enum at_cmd_type cmd_type)
+{
+	int err = -EINVAL;
+	uint16_t op;
+	uint16_t name;
+	enum at_param_type type = AT_PARAM_TYPE_NUM_INT;
 
+	switch (cmd_type) {
+	case AT_CMD_TYPE_SET_COMMAND:
+		if (client.sec_tag == INVALID_SEC_TAG) {
+			LOG_ERR("Not secure socket");
+			return err;
+		}
+		err = at_params_unsigned_short_get(&at_param_list, 1, &op);
+		if (err) {
+			return err;
+		}
+		err = at_params_unsigned_short_get(&at_param_list, 2, &name);
+		if (err) {
+			return err;
+		}
+		if (op == AT_SOCKETOPT_SET) {
+			int value_int = 0;
+			char value_str[SLM_MAX_URL] = {0};
+			int size = SLM_MAX_URL;
+
+			type = at_params_type_get(&at_param_list, 3);
+			if (type == AT_PARAM_TYPE_NUM_INT) {
+				err = at_params_int_get(&at_param_list, 3, &value_int);
+				if (err) {
+					return err;
+				}
+			} else if (type == AT_PARAM_TYPE_STRING) {
+				err = util_string_get(&at_param_list, 3, value_str, &size);
+				LOG_DBG("%s size %d\n",__func__,size);
+				if (err) {
+					return err;
+				}
+			} else {
+				return -EINVAL;
+			}
+			if (type == AT_PARAM_TYPE_NUM_INT) {
+				err = do_secure_socketopt_set_int(name, value_int);
+			} else if (type == AT_PARAM_TYPE_STRING) {
+				if (size != 0) {
+					err = do_secure_socketopt_set_str(name, value_str);
+				} else {
+					err = do_secure_socketopt_set_str(name, NULL);
+				}
+			}
+		}  else if (op == AT_SOCKETOPT_GET) {
+			err = do_secure_socketopt_get(name);
+		} break;
+
+	case AT_CMD_TYPE_TEST_COMMAND:
+		sprintf(rsp_buf, "\r\n#XSSOCKETOPT: (%d),<name>,<value>\r\n", AT_SOCKETOPT_SET);
+		rsp_send(rsp_buf, strlen(rsp_buf));
+		err = 0;
+		break;
+
+	default:
+		break;
+	}
+
+	return err;
+}
 /**@brief handle AT#XBIND commands
  *  AT#XBIND=<port>
  *  AT#XBIND?
@@ -869,8 +1166,8 @@ int handle_at_bind(enum at_cmd_type cmd_type)
 int handle_at_connect(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
-	char url[TCPIP_MAX_URL];
-	int size = TCPIP_MAX_URL;
+	char url[SLM_MAX_URL];
+	int size = SLM_MAX_URL;
 	uint16_t port;
 
 	if (client.sock < 0) {
@@ -1022,8 +1319,8 @@ int handle_at_send(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t datatype;
-	char data[NET_IPV4_MTU];
-	int size = NET_IPV4_MTU;
+	char data[SLM_MAX_PAYLOAD + 1];
+	int size = SLM_MAX_PAYLOAD;
 
 	if (!client.connected) {
 		LOG_ERR("Not connected yet");
@@ -1098,11 +1395,11 @@ int handle_at_recv(enum at_cmd_type cmd_type)
 int handle_at_sendto(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
-	char url[TCPIP_MAX_URL];
-	int size = TCPIP_MAX_URL;
+	char url[SLM_MAX_URL];
+	int size = SLM_MAX_URL;
 	uint16_t port;
 	uint16_t datatype;
-	char data[NET_IPV4_MTU];
+	char data[SLM_MAX_PAYLOAD + 1];
 
 	if (client.sock < 0) {
 		LOG_ERR("Socket not opened yet");
@@ -1128,7 +1425,7 @@ int handle_at_sendto(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		size = NET_IPV4_MTU;
+		size = SLM_MAX_PAYLOAD;
 		err = util_string_get(&at_param_list, 4, data, &size);
 		if (err) {
 			return err;
@@ -1196,28 +1493,21 @@ int handle_at_recvfrom(enum at_cmd_type cmd_type)
 int handle_at_getaddrinfo(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
-	char url[TCPIP_MAX_URL];
-	int size = TCPIP_MAX_URL;
+	char hostname[NI_MAXHOST];
+	char host[SLM_MAX_URL];
+	int size = SLM_MAX_URL;
 	struct addrinfo *result;
-	struct addrinfo hints = {
-		.ai_family = AF_INET
-	};
-	struct sockaddr_in *host;
-	char ipv4addr[NET_IPV4_ADDR_LEN];
+	struct addrinfo *res;
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
-		err = util_string_get(&at_param_list, 1, url, &size);
+		err = util_string_get(&at_param_list, 1, host, &size);
 		if (err) {
 			return err;
 		}
-		if (check_for_ipv4(url, strlen(url))) {
-			LOG_ERR("already IPv4 address");
-			return -EINVAL;
-		}
-		err = getaddrinfo(url, NULL, &hints, &result);
+		err = getaddrinfo(host, NULL, NULL, &result);
 		if (err) {
-			sprintf(rsp_buf, "\r\n#XGETADDRINFO: %d\r\n", -err);
+			sprintf(rsp_buf, "\r\n#XGETADDRINFO: \"%s\"\r\n", gai_strerror(err));
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			return err;
 		} else if (result == NULL) {
@@ -1226,10 +1516,29 @@ int handle_at_getaddrinfo(enum at_cmd_type cmd_type)
 			return -ENOENT;
 		}
 
-		host = (struct sockaddr_in *)result->ai_addr;
-		inet_ntop(AF_INET, &(host->sin_addr.s_addr),
-			ipv4addr, sizeof(ipv4addr));
-		sprintf(rsp_buf, "\r\n#XGETADDRINFO: \"%s\"\r\n", ipv4addr);
+		sprintf(rsp_buf, "\r\n#XGETADDRINFO: \"");
+		/* loop over all returned results and do inverse lookup */
+		for (res = result; res != NULL; res = res->ai_next) {
+			if (res->ai_family == AF_INET) {
+				struct sockaddr_in *host = (struct sockaddr_in *)result->ai_addr;
+
+				(void)inet_ntop(AF_INET, &(host->sin_addr.s_addr),
+					hostname, sizeof(hostname));
+			} else if (res->ai_family == AF_INET6) {
+				struct sockaddr_in6 *host = (struct sockaddr_in6 *)result->ai_addr;
+
+				(void)inet_ntop(AF_INET6, &(host->sin6_addr.s6_addr),
+					hostname, sizeof(hostname));
+			} else {
+				continue;
+			}
+
+			strcat(rsp_buf, hostname);
+			if (res->ai_next) {
+				strcat(rsp_buf, " ");
+			}
+		}
+		strcat(rsp_buf, "\"\r\n");
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		freeaddrinfo(result);
 		break;
@@ -1251,6 +1560,7 @@ int slm_at_tcpip_init(void)
 	client.sock_peer = INVALID_SOCKET;
 	client.connected = false;
 	client.ip_proto = SLM_IPPROTO_IP;
+	client.family = AF_UNSPEC;
 	return 0;
 }
 

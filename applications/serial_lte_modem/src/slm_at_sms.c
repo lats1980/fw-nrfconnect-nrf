@@ -28,14 +28,14 @@ void rsp_send(const uint8_t *str, size_t len);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
-extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 
 static void sms_callback(struct sms_data *const data, void *context)
 {
 	static uint16_t ref_number;
 	static uint8_t total_msgs;
 	static uint8_t count;
-	static char messages[MAX_CONCATENATED_MESSAGE - 1][SMS_MAX_PAYLOAD_LEN_CHARS];
+	static char messages[MAX_CONCATENATED_MESSAGE - 1][SMS_MAX_PAYLOAD_LEN_CHARS + 1];
 
 	ARG_UNUSED(context);
 
