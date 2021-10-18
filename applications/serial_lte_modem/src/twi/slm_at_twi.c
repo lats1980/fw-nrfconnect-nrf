@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(slm_twi, CONFIG_SLM_LOG_LEVEL);
 #define TWI_ADDR_LEN		2
 #define TWI_DATA_LEN		255
 
-#if (TWI_DATA_LEN * 2) > (CONFIG_SLM_SOCKET_RX_MAX * 2)
+#if (TWI_DATA_LEN * 2) > (CONFIG_AT_CMD_RESPONSE_MAX_LEN)
 # error "Please specify smaller TWI_DATA_LEN"
 #endif
 
@@ -37,7 +37,7 @@ void rsp_send(const uint8_t *str, size_t len);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
-extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 
 static void do_twi_list(void)
 {

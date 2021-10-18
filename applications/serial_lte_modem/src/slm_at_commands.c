@@ -77,7 +77,7 @@ static struct slm_work_info {
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
-extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 extern uint16_t datamode_time_limit;
 extern struct uart_config slm_uart;
 
@@ -381,6 +381,7 @@ int handle_at_udp_send(enum at_cmd_type cmd_type);
 /* Socket-type TCPIP commands */
 int handle_at_socket(enum at_cmd_type cmd_type);
 int handle_at_socketopt(enum at_cmd_type cmd_type);
+int handle_at_secure_socketopt(enum at_cmd_type cmd_type);
 int handle_at_bind(enum at_cmd_type cmd_type);
 int handle_at_connect(enum at_cmd_type cmd_type);
 int handle_at_listen(enum at_cmd_type cmd_type);
@@ -476,6 +477,7 @@ static struct slm_at_cmd {
 	/* Socket-type TCPIP commands */
 	{"AT#XSOCKET", handle_at_socket},
 	{"AT#XSOCKETOPT", handle_at_socketopt},
+	{"AT#XSSOCKETOPT", handle_at_secure_socketopt},
 	{"AT#XBIND", handle_at_bind},
 	{"AT#XCONNECT", handle_at_connect},
 	{"AT#XLISTEN", handle_at_listen},

@@ -8,9 +8,12 @@
 #include <errno.h>
 #include <stdio.h>
 #include "slm_util.h"
-#include <net/socket.h>
+#include "slm_at_host.h"
 
 #define PRINTABLE_ASCII(ch) (ch > 0x1f && ch < 0x7f)
+
+/* global variable defined in different files */
+extern struct at_param_list at_param_list;
 
 /**
  * @brief Compare string ignoring case
@@ -164,33 +167,23 @@ bool check_for_ipv4(const char *address, uint8_t length)
 	return true;
 }
 
-/**brief use AT command to get IPv4 address
+/**@brief Check whether a string has valid IPv4/IPv6 address or not
  */
-bool util_get_ipv4_addr(char *address)
+bool check_for_ip_format(const char *address, uint8_t length)
 {
-	int err;
-	char at_rsp[128];
-	char *tmp1, *tmp2;
+	int retv4 = 0 , retv6 = 0;
+	char tmp[sizeof(struct in6_addr)];
 
-	err = at_cmd_write("AT+CGPADDR", at_rsp, sizeof(at_rsp), NULL);
-	if (err) {
+	retv4 = inet_pton(AF_INET, address, tmp);
+	retv6 = inet_pton(AF_INET6, address, tmp);
+	if(retv4 == 1 || retv6 ==1 ){
+		return true;
+	}
+	else{
 		return false;
 	}
-	/* parse +CGPADDR: 0,"10.145.192.136" */
-	tmp1 = strstr(at_rsp, "\"");
-	if (tmp1 == NULL) {
-		return false;
-	}
-	tmp1++;
-	tmp2 = strstr(tmp1, "\"");
-	if (tmp2 == NULL) {
-		return false;
-	}
-
-	memcpy(address, tmp1, tmp2 - tmp1);
-	address[tmp2 - tmp1] = '\0';
-	return true;
 }
+
 
 /**
  * @brief Get string value from AT command with length check
@@ -212,4 +205,113 @@ int util_string_get(const struct at_param_list *list, size_t index,
 	}
 
 	return -ENOMEM;
+}
+
+/**
+ * @brief use AT command to get IPv4 and/or IPv6 address
+ */
+void util_get_ip_addr(char *addr4, char *addr6)
+{
+	int err;
+	char rsp[128];
+	char tmp[sizeof(struct in6_addr)];
+	char addr[NET_IPV6_ADDR_LEN];
+	size_t addr_len;
+
+	err = at_cmd_write("AT+CGPADDR", rsp, sizeof(rsp), NULL);
+	if (err) {
+		return;
+	}
+	/** parse +CGPADDR: <cid>,<PDP_addr_1>,<PDP_addr_2>
+	 * PDN type "IP": PDP_addr_1 is <IPv4>
+	 * PDN type "IPV6": PDP_addr_1 is <IPv6>
+	 * PDN type "IPV4V6": <IPv4>,<IPv6> or <IPV4> or <IPv6>
+	 */
+	err = at_parser_params_from_str(rsp, NULL, &at_param_list);
+	if (err) {
+		return;
+	}
+
+	/* parse first IP string, could be IPv4 or IPv6 */
+	addr_len = NET_IPV6_ADDR_LEN;
+	err = util_string_get(&at_param_list, 2, addr, &addr_len);
+	if (err) {
+		return;
+	}
+	if (addr4 != NULL && inet_pton(AF_INET, addr, tmp) == 1) {
+		strcpy(addr4, addr);
+	} else if (addr6 != NULL && inet_pton(AF_INET6, addr, tmp) == 1) {
+		strcpy(addr6, addr);
+		return;
+	}
+	/* parse second IP string, IPv6 only */
+	if (addr6 == NULL) {
+		return;
+	}
+	addr_len = NET_IPV6_ADDR_LEN;
+	err = util_string_get(&at_param_list, 3, addr, &addr_len);
+	if (err) {
+		return;
+	}
+	if (inet_pton(AF_INET6, addr, tmp) == 1) {
+		strcpy(addr6, addr);
+	}
+	/* only parse addresses from primary PDN */
+}
+
+/**
+ * @brief Convert string to integer
+ */
+int util_str_to_int(const char *str_buf, int base, int *output)
+{
+	int temp;
+	char *end_ptr = NULL;
+
+	errno = 0;
+	temp = strtol(str_buf, &end_ptr, base);
+
+	if (end_ptr == str_buf || *end_ptr != '\0' ||
+	    ((temp == LONG_MAX || temp == LONG_MIN) && errno == ERANGE)) {
+		return -ENODATA;
+	}
+
+	*output = temp;
+	return 0;
+}
+
+/**
+ * @brief Resolve remote host by hostname or IP address
+ */
+#define PORT_MAX_SIZE    5 /* 0xFFFF = 65535 */
+#define PDN_ID_MAX_SIZE  2 /* 0..10 */
+
+int util_resolve_host(int cid, const char *host, uint16_t port, int family, struct sockaddr *sa)
+{
+	int err;
+	char service[PORT_MAX_SIZE + PDN_ID_MAX_SIZE + 2];
+	struct addrinfo *ai = NULL;
+	struct addrinfo hints = {
+		.ai_flags  = AI_NUMERICSERV | AI_PDNSERV,
+		.ai_family = family
+	};
+
+	if (sa == NULL) {
+		return DNS_EAI_AGAIN;
+	}
+
+	/* "service" shall be formatted as follows: "port:pdn_id" */
+	snprintf(service, sizeof(service), "%hu:%d", port, cid);
+	err = getaddrinfo(host, service, &hints, &ai);
+	if (err) {
+		return err;
+	}
+
+	*sa = *(ai->ai_addr);
+	freeaddrinfo(ai);
+
+	if (sa->sa_family != AF_INET && sa->sa_family != AF_INET6) {
+		return DNS_EAI_ADDRFAMILY;
+	}
+
+	return 0;
 }

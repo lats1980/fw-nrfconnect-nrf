@@ -16,14 +16,13 @@
 #include <zephyr/types.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <net/socket.h>
 #include <modem/at_cmd.h>
 #include <modem/at_cmd_parser.h>
 
 #define INVALID_SOCKET	-1
 #define INVALID_SEC_TAG	-1
 #define INVALID_ROLE	-1
-
-#define TCPIP_MAX_URL	128
 
 /* Merged Protocol numbers of SLM */
 enum slm_ip_protocol {
@@ -118,13 +117,14 @@ int slm_util_atoh(const char *ascii, uint16_t ascii_len,
  */
 bool check_for_ipv4(const char *address, uint8_t length);
 
-/**brief use AT command to get IPv4 address
+/**@brief Check whether a string has valid IPv4/IPv6 address format or not
  *
- * @param[in] address buffer to hold the IPv4 address
+ * @param address URL text string
+ * @param length size of URL string
  *
- * @return true if IPv4 address obtained, false otherwise
+ * @return true if text string is IPv4 address, false otherwise
  */
-bool util_get_ipv4_addr(char *address);
+bool check_for_ip_format(const char *address, uint8_t length);
 
 /**
  * @brief Get string value from AT command with length check.
@@ -144,6 +144,30 @@ bool util_get_ipv4_addr(char *address);
  */
 int util_string_get(const struct at_param_list *list, size_t index,
 			 char *value, size_t *len);
+
+/**
+ * @brief use AT command to get IPv4 and IPv6 addresses
+ *
+ * @param[in] addr4 buffer to hold the IPv4 address, size NET_IPV4_ADDR_LEN
+ * @param[in] addr6 buffer to hold the IPv6 address, size NET_IPV6_ADDR_LEN
+ */
+void util_get_ip_addr(char *addr4, char *addr6);
+
+/**
+ * @brief Resolve remote host by host name or IP address
+ *
+ * This function wraps up getaddrinfo() to return first resolved address.
+ *
+ * @param[in] cid PDP Context ID as defined in "+CGDCONT" command (0~10).
+ * @param[in] host Name or IP address of remote host.
+ * @param[in] port Service port of remote host.
+ * @param[in] family Desired address family for the returned address.
+ * @param[out] sa The returned address.
+ *
+ * @retval 0 If the operation was successful.
+ *           Otherwise, EAI error code as defined by getaddrinfo().
+ */
+int util_resolve_host(int cid, const char *host, uint16_t port, int family, struct sockaddr *sa);
 
 /** @} */
 

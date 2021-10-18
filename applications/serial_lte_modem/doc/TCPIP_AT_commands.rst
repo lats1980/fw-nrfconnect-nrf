@@ -30,8 +30,9 @@ Syntax
 
 * The ``<op>`` parameter can accept one of the following values:
 
-  * ``0`` - Close
-  * ``1`` - Open
+  * ``0`` - Close a socket.
+  * ``1`` - Open a socket for IP protocol family version 4.
+  * ``2`` - Open a socket for IP protocol family version 6.
 
 * The ``<sec_tag>`` parameter is an integer.
   It indicates to the modem the credential of the security tag used for establishing a secure connection.
@@ -138,7 +139,7 @@ Response syntax
 
 ::
 
-   #XSOCKET: <handle>[,<protocol>,<role>]
+   #XSOCKET: <handle>[,<protocol>,<role>,<family>]
 
 * The ``<handle>`` value is an integer.
   It can be interpreted as follows:
@@ -154,10 +155,16 @@ Response syntax
   * ``258`` - IPPROTO_TLS_1_2
   * ``273`` - IPPROTO_DTLS_1_2
 
-* The ``<role>`` parameter can accept one of the following values:
+* The ``<role>`` parameter can be one of the following values:
 
   * ``0`` - Client
   * ``1`` - Server
+
+* The ``<family>`` value is present only in the response to a request to open the socket.
+  It can assume one of the following values:
+
+  * ``1`` - IP protocol family version 4.
+  * ``2`` - IP protocol family version 6.
 
 Examples
 ~~~~~~~~
@@ -165,13 +172,13 @@ Examples
 ::
 
    AT#XSOCKET?
-   #XSOCKET: 3,6,0
+   #XSOCKET: 3,6,0,1
    OK
 
 ::
 
    AT#XSOCKET?
-   #XSOCKET: 3,17,0
+   #XSOCKET: 3,17,0,1
    OK
 
 ::
@@ -827,12 +834,12 @@ The test command is not supported.
 Resolve hostname #XGETADDRINFO
 ==============================
 
-The ``#XGETADDRINFO`` command allows you to resolve hostnames to IPv4 addresses.
+The ``#XGETADDRINFO`` command allows you to resolve hostnames to IPv4 and/or IPv6 addresses.
 
 Set command
 -----------
 
-The set command allows you to resolve hostnames to IPv4 addresses.
+The set command allows you to resolve hostnames to IPv4 and/or IPv6 addresses.
 
 Syntax
 ~~~~~~
@@ -842,7 +849,6 @@ Syntax
    #XGETADDRINFO=<hostname>
 
 The ``<hostname>`` parameter is a string.
-It cannot be an IPv4 address string.
 
 Response syntax
 ~~~~~~~~~~~~~~~
@@ -852,7 +858,7 @@ Response syntax
    #XGETADDRINFO: "<ip_addr>"
 
 * The ``<ip_addr>`` value is a string.
-  It indicates the IPv4 address of the resolved hostname.
+  It indicates the IPv4 and/or IPv6 address of the resolved hostname.
 
 Examples
 ~~~~~~~~
@@ -1016,21 +1022,28 @@ Syntax
 ~~~~~~
 
 ::
+   .. option:: CONFIG_SLM_HTTPC - HTTP client support in SLM .. is enabled.
+   #XTCPSVR=<op>[,<port>,<timeout>,[sec_tag]]
 
-   #XTCPSVR=<op>[<port>[,<sec_tag>]]
+   .. option:: CONFIG_SLM_HTTPC - HTTP client support in SLM .. is disabled.
+   #XTCPSVR=<op>[,<port>[,<sec_tag>]]
 
 
 * The ``<op>`` parameter can accept one of the following values:
 
   * ``0`` - Stop the server
-  * ``1`` - Start the server
-  * ``2`` - Start the server with data mode support
+  * ``1`` - Start the server using IP protocol family version 4.
+  * ``2`` - Start the server using IP protocol family version 4 with data mode support
+  * ``3`` - Start the server using IP protocol family version 6.
+  * ``4`` - Start the server using IP protocol family version 6 with data mode support
+
 
 * The ``<port>`` parameter is an unsigned 16-bit integer (0 - 65535).
   It represents the TCP service port.
   It is mandatory to set it when starting the server.
 * The ``<sec_tag>`` parameter is an integer.
   It indicates to the modem the credential of the security tag used for establishing a secure connection.
+* The ``<timeout>`` paramater is second before server disconnected.
 
 Response syntax
 ~~~~~~~~~~~~~~~
@@ -1072,7 +1085,7 @@ Examples
 
 ::
 
-   at#xtcpsvr=1,3442,600
+   AT#XTCPSVR=1,3442,600
    #XTCPSVR: 2,"started"
    OK
    #XTCPSVR: "5.123.123.99","connected"
@@ -1097,7 +1110,10 @@ Response syntax
 ~~~~~~~~~~~~~~~
 
 ::
+   .. option:: CONFIG_SLM_HTTPC - HTTP client support in SLM .. is enabled.
+   #XTCPSVR: <listen_socket_handle>,<income_socket_handle>,<data_mode>,<timeout>,<data_mode>,<family>
 
+   .. option:: CONFIG_SLM_HTTPC - HTTP client support in SLM .. is disabled.
    #XTCPSVR: <listen_socket_handle>,<income_socket_handle>,<data_mode>
 
 The ``<handle>`` value is an integer.
@@ -1109,16 +1125,21 @@ When negative, it indicates that it failed to open or that there is no incoming 
   * ``0`` - Disabled
   * ``1`` - Enabled
 
+* The ``<family>`` value is one of the following values:
+
+  * ``1`` - IP protocol family version 4.
+  * ``2`` - IP protocol family version 6.
+
 Examples
 ~~~~~~~~
 
 ::
 
-   at#xtcpsvr?
+   AT#XTCPSVR?
    #XTCPSVR: 1,2,0
    OK
    #XTCPSVR: -110,"disconnected"
-   at#xtcpsvr?
+   AT#XTCPSVR?
    #XTCPSVR: 1,-1
    OK
 
