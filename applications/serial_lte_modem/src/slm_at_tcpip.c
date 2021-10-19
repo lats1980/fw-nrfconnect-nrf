@@ -1374,7 +1374,7 @@ int handle_at_recv(enum at_cmd_type cmd_type)
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
 		err = at_params_unsigned_short_get(&at_param_list, 1, &length);
-		if (err) {
+		if (err || (length > CONFIG_SLM_SOCKET_RX_MAX)) {
 			length = CONFIG_SLM_SOCKET_RX_MAX;
 		}
 		err = do_recv(length);
@@ -1472,7 +1472,7 @@ int handle_at_recvfrom(enum at_cmd_type cmd_type)
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
 		err = at_params_unsigned_short_get(&at_param_list, 1, &length);
-		if (err) {
+		if (err || (length > CONFIG_SLM_SOCKET_RX_MAX)) {
 			length = CONFIG_SLM_SOCKET_RX_MAX;
 		}
 		err = do_recvfrom(length);
