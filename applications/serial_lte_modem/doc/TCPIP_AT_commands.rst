@@ -30,8 +30,9 @@ Syntax
 
 * The ``<op>`` parameter can accept one of the following values:
 
-  * ``0`` - Close
-  * ``1`` - Open
+  * ``0`` - Close a socket.
+  * ``1`` - Open a socket for IP protocol family version 4.
+  * ``2`` - Open a socket for IP protocol family version 6.
 
 * The ``<sec_tag>`` parameter is an integer.
   It indicates to the modem the credential of the security tag used for establishing a secure connection.
@@ -138,7 +139,7 @@ Response syntax
 
 ::
 
-   #XSOCKET: <handle>[,<protocol>,<role>]
+   #XSOCKET: <handle>[,<protocol>,<role>,<family>]
 
 * The ``<handle>`` value is an integer.
   It can be interpreted as follows:
@@ -154,10 +155,16 @@ Response syntax
   * ``258`` - IPPROTO_TLS_1_2
   * ``273`` - IPPROTO_DTLS_1_2
 
-* The ``<role>`` parameter can accept one of the following values:
+* The ``<role>`` parameter can be one of the following values:
 
   * ``0`` - Client
   * ``1`` - Server
+
+* The ``<family>`` value is present only in the response to a request to open the socket.
+  It can assume one of the following values:
+
+  * ``1`` - IP protocol family version 4.
+  * ``2`` - IP protocol family version 6.
 
 Examples
 ~~~~~~~~
@@ -165,24 +172,24 @@ Examples
 ::
 
    AT#XSOCKET?
-   #XSOCKET: 3,6,0
+   #XSOCKET: 3,6,0,1
    OK
 
 ::
 
    AT#XSOCKET?
-   #XSOCKET: 3,17,0
+   #XSOCKET: 3,17,0,1
    OK
 
 ::
 
-   at#xsocket?
+   AT#XSOCKET?
    #XSOCKET: 2,258,0
    OK
 
 ::
 
-   at#xsocket?
+   AT#XSOCKET?
    #XSOCKET: 2,273,0
    OK
 
@@ -203,7 +210,7 @@ Response syntax
 
 ::
 
-   #XSOCKET: <list of op value>,<list of type value>,<list of roles>,<sec-tag>
+   #XSOCKET: <list of op value>,<list of type value>,<list of roles>,<sec_tag>
 
 
 * The ``<op>`` parameter can accept one of the following values:
@@ -235,7 +242,7 @@ Examples
 
 ::
 
-   at#xsocket=?
+   AT#XSOCKET=?
    #XSOCKET: (0,1),(1,2),<sec_tag>
    OK
 
@@ -288,12 +295,12 @@ Examples
 
 ::
 
-   at#xsocketopt=1,20,30
+   AT#XSOCKETOPT=1,20,30
    OK
 
 ::
 
-   at#xsocketopt=0,20
+   AT#XSOCKETOPT=0,20
    #XSOCKETOPT: 30
    OK
 
@@ -326,9 +333,90 @@ Examples
 
 ::
 
-   at#xsocketopt=?
+   AT#XSOCKETOPT=?
    #XSOCKETOPT: (0,1),<name>,<value>
    OK
+
+Secure Socket options #XSSOCKETOPT
+=================================
+
+The ``#XSSOCKETOPT`` command allows you to set secure socket options.
+
+Set command
+-----------
+
+The set command allows you to set secure socket options.
+
+Syntax
+~~~~~~
+
+::
+
+   #XSSOCKETOPT=<op>,<name>[,<value>]
+
+* The ``<op>`` parameter can accept one of the following values:
+
+  * ``0`` - Get
+  * ``1`` - Set
+
+* The ``<name>`` parameter can accept one of the following values:
+
+  * ``2`` - ``TLS_HOSTNAME``.
+    ``<value>`` is a string.
+  * ``4`` - ``TLS_CIPHERSUITE_USED`` (get-only).
+    It returns the IANA assigned ciphersuite identifier of the chosen ciphersuite.
+  * ``5`` - ``TLS_PEER_VERIFY``.
+    ``<value>`` is an integer and can be either ``0`` or ``1``.
+  * ``10`` - ``TLS_SESSION_CACHE``.
+    ``<value>`` is an integer and can be either ``0`` or ``1``.
+  * ``11`` - ``TLS_SESSION_CACHE_PURGE``.
+    ``<value>`` can assume any integer value.
+  * ``12`` - ``TLS_DTLS_HANDSHAKE_TIMEO``.
+    ``<value>`` is the timeout in seconds and can be one of the following integers: ``1``, ``3``, ``7``, ``15``, ``31``, ``63``, ``123``.
+
+For a complete list of the supported ``<name>`` accepted parameters, see the `SETSOCKETOPT Service Spec Reference`_.
+
+Examples
+~~~~~~~~
+
+::
+
+   AT#XSSOCKETOPT=1,5,2
+   OK
+
+Read command
+------------
+
+The read command is not supported.
+
+Test command
+------------
+
+The test command tests the existence of the command and provides information about the type of its subparameters.
+
+Syntax
+~~~~~~
+
+::
+
+   #XSSOCKETOPT=?
+
+Response syntax
+~~~~~~~~~~~~~~~
+
+::
+
+   #XSSOCKETOPT: <list of op>,<name>,<value>
+
+Examples
+~~~~~~~~
+
+::
+
+   AT#XSSOCKETOPT=?
+   #XSSOCKETOPT: (1),<name>,<value>
+   OK
+
 
 Socket binding #XBIND
 =====================
@@ -827,12 +915,12 @@ The test command is not supported.
 Resolve hostname #XGETADDRINFO
 ==============================
 
-The ``#XGETADDRINFO`` command allows you to resolve hostnames to IPv4 addresses.
+The ``#XGETADDRINFO`` command allows you to resolve hostnames to IPv4 and/or IPv6 addresses.
 
 Set command
 -----------
 
-The set command allows you to resolve hostnames to IPv4 addresses.
+The set command allows you to resolve hostnames to IPv4 and/or IPv6 addresses.
 
 Syntax
 ~~~~~~
@@ -842,7 +930,6 @@ Syntax
    #XGETADDRINFO=<hostname>
 
 The ``<hostname>`` parameter is a string.
-It cannot be an IPv4 address string.
 
 Response syntax
 ~~~~~~~~~~~~~~~
@@ -852,7 +939,7 @@ Response syntax
    #XGETADDRINFO: "<ip_addr>"
 
 * The ``<ip_addr>`` value is a string.
-  It indicates the IPv4 address of the resolved hostname.
+  It indicates the IPv4 and/or IPv6 address of the resolved hostname.
 
 Examples
 ~~~~~~~~
@@ -998,7 +1085,7 @@ Examples
 
 ::
 
-   at#XTCPFILTER=?
+   AT#XTCPFILTER=?
    #XTCPFILTER: (0,1),<IP_ADDR#1>[,<IP_ADDR#2>[,...]]
    OK
 
@@ -1016,21 +1103,28 @@ Syntax
 ~~~~~~
 
 ::
+   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is enabled.
+   #XTCPSVR=<op>[,<port>,<timeout>,[sec_tag]]
 
-   #XTCPSVR=<op>[<port>[,<sec_tag>]]
+   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is disabled.
+   #XTCPSVR=<op>[,<port>[,<sec_tag>]]
 
 
 * The ``<op>`` parameter can accept one of the following values:
 
   * ``0`` - Stop the server
-  * ``1`` - Start the server
-  * ``2`` - Start the server with data mode support
+  * ``1`` - Start the server using IP protocol family version 4.
+  * ``2`` - Start the server using IP protocol family version 4 with data mode support.
+  * ``3`` - Start the server using IP protocol family version 6.
+  * ``4`` - Start the server using IP protocol family version 6 with data mode support.
+
 
 * The ``<port>`` parameter is an unsigned 16-bit integer (0 - 65535).
   It represents the TCP service port.
   It is mandatory to set it when starting the server.
 * The ``<sec_tag>`` parameter is an integer.
   It indicates to the modem the credential of the security tag used for establishing a secure connection.
+* The ``<timeout>`` paramater is second before server disconnected.
 
 Response syntax
 ~~~~~~~~~~~~~~~
@@ -1072,7 +1166,7 @@ Examples
 
 ::
 
-   at#xtcpsvr=1,3442,600
+   AT#XTCPSVR=1,3442,600
    #XTCPSVR: 2,"started"
    OK
    #XTCPSVR: "5.123.123.99","connected"
@@ -1097,7 +1191,10 @@ Response syntax
 ~~~~~~~~~~~~~~~
 
 ::
+   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is enabled.
+   #XTCPSVR: <listen_socket_handle>,<income_socket_handle>,<timeout>,<data_mode>,<family>
 
+   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is disabled.
    #XTCPSVR: <listen_socket_handle>,<income_socket_handle>,<data_mode>
 
 The ``<handle>`` value is an integer.
@@ -1109,16 +1206,21 @@ When negative, it indicates that it failed to open or that there is no incoming 
   * ``0`` - Disabled
   * ``1`` - Enabled
 
+* The ``<family>`` value is one of the following values:
+
+  * ``1`` - IP protocol family version 4.
+  * ``2`` - IP protocol family version 6.
+
 Examples
 ~~~~~~~~
 
 ::
 
-   at#xtcpsvr?
+   AT#XTCPSVR?
    #XTCPSVR: 1,2,0
    OK
    #XTCPSVR: -110,"disconnected"
-   at#xtcpsvr?
+   AT#XTCPSVR?
    #XTCPSVR: 1,-1
    OK
 
@@ -1146,7 +1248,7 @@ Examples
 
 ::
 
-   at#xtcpsvr=?
+   AT#XTCPSVR=?
    #XTCPSVR: (0,1,2),<port>,<sec_tag>
    OK
 
@@ -1170,8 +1272,10 @@ Syntax
 * The ``<op>`` parameter can accept one of the following values:
 
   * ``0`` - Disconnect
-  * ``1`` - Connect to the server
-  * ``2`` - Connect to the server with data mode support
+  * ``1`` - Connect to the server using IP protocol family version 4.
+  * ``2`` - Connect to the server using IP protocol family version 4 with data mode support.
+  * ``3`` - Connect to the server using IP protocol family version 6.
+  * ``4`` - Connect to the server using IP protocol family version 6 with data mode support.
 
 * The ``<url>`` parameter is a string.
   It indicates the hostname or the IP address to connect to.
@@ -1222,13 +1326,13 @@ Examples
 
 ::
 
-   at#xtcpcli=1,"remote.ip",1234
+   AT#XTCPCLI=1,"remote.ip",1234
    #XTCPCLI: 2,"connected"
    OK
    #XTCPDATA: 1,31
    PONG: b'Test TCP by IP address'
 
-   at#xtcpcli=0
+   AT#XTCPCLI=0
    OK
 
 Read command
@@ -1276,7 +1380,7 @@ Examples
 
 ::
 
-   at#xtcpcli=?
+   AT#XTCPCLI=?
    #XTCPCLI: (0,1,2),<url>,<port>,<sec_tag>
    OK
 
@@ -1327,7 +1431,7 @@ Examples
 
 ::
 
-   at#xtcpsend=1,"Test TLS client"
+   AT#XTCPSEND=1,"Test TLS client"
    #XTCPSEND: 15
    OK
 
@@ -1402,9 +1506,11 @@ Syntax
 
 * The ``<op>`` parameter can accept one of the following values:
 
-  * ``0`` - Stop the server
-  * ``1`` - Start the server
-  * ``2`` - Start the server with data mode support
+  * ``0`` - Stop the server.
+  * ``1`` - Start the server using IP protocol family version 4.
+  * ``2`` - Start the server using IP protocol family version 4 with data mode support.
+  * ``3`` - Start the server using IP protocol family version 6.
+  * ``4`` - Start the server using IP protocol family version 6 with data mode support.
 
 * The ``<port>`` parameter is an unsigned 16-bit integer (0 - 65535).
   It represents the UDP service port.
@@ -1454,7 +1560,7 @@ Examples
 
 ::
 
-   at#xudpsvr=1,3442
+   at#XUDPSVR=1,3442
    #XUDPSVR: 2,"started"
    OK
    #XUDPDATA: 1,13
@@ -1514,7 +1620,7 @@ Examples
 
 ::
 
-   at#xudpsvr=?
+   AT#XUDPSVR=?
    #XUDPSVR: (0,1,2),<port>,<sec_tag>
    OK
 
@@ -1537,9 +1643,11 @@ Syntax
 
 * The ``<op>`` parameter can accept one of the following values:
 
-  * ``0`` - Disconnect
-  * ``1`` - Connect to the server
-  * ``2`` - Connect to the server with data mode support
+  * ``0`` - Disconnect.
+  * ``1`` - Connect to the server using IP protocol family version 4.
+  * ``2`` - Connect to the server using IP protocol family version 4 with data mode support.
+  * ``3`` - Connect to the server using IP protocol family version 6.
+  * ``4`` - Connect to the server using IP protocol family version 6 with data mode support.
 
 * The ``<url>`` parameter is a string.
   It indicates the hostname or the IP address to connect to.
@@ -1588,15 +1696,15 @@ Examples
 
 ::
 
-   at#xudpcli=1,"remote.host",2442
+   AT#XUDPCLI=1,"remote.host",2442
    #XUDPCLI: 2,"connected"
    OK
-   at#xudpsend=1,"Test UDP by hostname"
+   AT#XUDPSEND=1,"Test UDP by hostname"
    #XUDPSEND: 20
    OK
    #XUDPDATA: 1,26
    PONG: Test UDP by hostname
-   at#xudpcli=0
+   AT#XUDPCLI=0
    OK
 
 Read command
@@ -1644,7 +1752,7 @@ Examples
 
 ::
 
-   at#xudpcli=?
+   AT#XUDPCLI=?
    #XUDPCLI: (0,1,2),<url>,<port>,<sec_tag>
    OK
 
@@ -1692,7 +1800,7 @@ Examples
 
 ::
 
-   at#xudpsend=1,"Test UDP by hostname"
+   AT#XUDPSEND=1,"Test UDP by hostname"
    #XUDPSEND: 20
    OK
 

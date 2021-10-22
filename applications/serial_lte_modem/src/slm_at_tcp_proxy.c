@@ -24,7 +24,7 @@
 
 LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
 
-#define THREAD_STACK_SIZE	(KB(3) + NET_IPV4_MTU)
+#define THREAD_STACK_SIZE	KB(4)
 #define THREAD_PRIORITY		K_LOWEST_APPLICATION_THREAD_PRIO
 
 /* max 2, listening and incoming sockets */
@@ -35,20 +35,24 @@ LOG_MODULE_REGISTER(tcp_proxy, CONFIG_SLM_LOG_LEVEL);
 
 /**@brief Proxy operations. */
 enum slm_tcp_proxy_operation {
-	AT_SERVER_STOP,
-	AT_FILTER_CLEAR =  AT_SERVER_STOP,
-	AT_CLIENT_DISCONNECT = AT_SERVER_STOP,
-	AT_SERVER_START,
-	AT_FILTER_SET =  AT_SERVER_START,
-	AT_CLIENT_CONNECT = AT_SERVER_START,
-	AT_SERVER_START_WITH_DATAMODE,
-	AT_CLIENT_CONNECT_WITH_DATAMODE = AT_SERVER_START_WITH_DATAMODE
+	SERVER_STOP,
+	AT_FILTER_CLEAR =  SERVER_STOP,
+	CLIENT_DISCONNECT = SERVER_STOP,
+	SERVER_START,
+	AT_FILTER_SET =  SERVER_START,
+	CLIENT_CONNECT = SERVER_START,
+	SERVER_START_WITH_DATAMODE,
+	CLIENT_CONNECT_WITH_DATAMODE = SERVER_START_WITH_DATAMODE,
+	SERVER_START6 ,
+	CLIENT_CONNECT6 = SERVER_START6,
+	SERVER_START6_WITH_DATAMODE,
+	CLIENT_CONNECT6_WITH_DATAMODE = SERVER_START6_WITH_DATAMODE,
 };
 
 /**@brief Proxy roles. */
-enum slm_tcp_proxy_role {
-	AT_TCP_ROLE_CLIENT,
-	AT_TCP_ROLE_SERVER
+enum slm_tcp_role {
+	TCP_ROLE_CLIENT,
+	TCP_ROLE_SERVER
 };
 
 /**@brief Proxy operations for auto accept. */
@@ -79,8 +83,8 @@ enum slm_tcpsvr_state {
 
 static enum slm_tcpsvr_state tcpsvr_state;
 static struct k_work_delayable tcpsvr_state_work;
-static char ip_allowlist[CONFIG_SLM_TCP_FILTER_SIZE][INET_ADDRSTRLEN];
-RING_BUF_DECLARE(data_buf, CONFIG_SLM_SOCKET_RX_MAX * 2);
+static char ip_allowlist[CONFIG_SLM_TCP_FILTER_SIZE][INET6_ADDRSTRLEN];
+RING_BUF_DECLARE(data_buf, CONFIG_AT_CMD_RESPONSE_MAX_LEN);
 static struct k_thread tcp_thread;
 static struct k_work disconnect_work;
 static K_THREAD_STACK_DEFINE(tcp_thread_stack, THREAD_STACK_SIZE);
@@ -89,6 +93,7 @@ K_TIMER_DEFINE(conn_timer, NULL, NULL);
 #endif
 
 static struct sockaddr_in remote;
+static struct sockaddr_in6 remotev6;
 static struct tcp_proxy_t {
 	int sock;		/* Socket descriptor. */
 	sec_tag_t sec_tag;	/* Security tag of the credential */
@@ -101,6 +106,7 @@ static struct tcp_proxy_t {
 #if defined(CONFIG_SLM_CUSTOMIZED)
 	uint16_t timeout;	/* Peer connection timeout */
 #endif
+	int family;		/* Socket address family */
 } proxy;
 static struct pollfd fds[MAX_POLL_FD];
 static int nfds;
@@ -113,7 +119,7 @@ bool check_uart_flowcontrol(void);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
-extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
 
 #if defined(CONFIG_SLM_CUSTOMIZED_RS232)
@@ -129,9 +135,6 @@ static void tcpsvr_thread_func(void *p1, void *p2, void *p3);
 static int do_tcp_server_start(uint16_t port)
 {
 	int ret = 0;
-	struct sockaddr_in local;
-	int addr_len;
-	char ipv4_addr[NET_IPV4_ADDR_LEN];
 	int reuseaddr = 1;
 
 #if defined(CONFIG_SLM_NATIVE_TLS)
@@ -155,9 +158,9 @@ static int do_tcp_server_start(uint16_t port)
 #endif
 	/* Open socket */
 	if (proxy.sec_tag == INVALID_SEC_TAG) {
-		proxy.sock = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE, IPPROTO_TCP);
+		proxy.sock = socket(proxy.family, SOCK_STREAM | SOCK_NATIVE, IPPROTO_TCP);
 	} else {
-		proxy.sock = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE, IPPROTO_TLS_1_2);
+		proxy.sock = socket(proxy.family, SOCK_STREAM | SOCK_NATIVE, IPPROTO_TLS_1_2);
 	}
 	if (proxy.sock < 0) {
 		LOG_ERR("socket() failed: %d", -errno);
@@ -165,6 +168,7 @@ static int do_tcp_server_start(uint16_t port)
 		goto exit;
 	}
 
+	/* Config socket options */
 	if (proxy.sec_tag != INVALID_SEC_TAG) {
 		sec_tag_t sec_tag_list[1] = { proxy.sec_tag };
 
@@ -186,31 +190,48 @@ static int do_tcp_server_start(uint16_t port)
 	}
 
 	/* Bind to local port */
-	local.sin_family = AF_INET;
-	local.sin_port = htons(port);
-	if (!util_get_ipv4_addr(ipv4_addr)) {
-		LOG_ERR("Unable to obtain local IPv4 address");
-		ret = -ENETUNREACH;
-		goto exit;
-	}
-	addr_len = strlen(ipv4_addr);
-	if (addr_len == 0) {
-		LOG_ERR("LTE not connected yet");
-		ret = -ENETUNREACH;
-		goto exit;
-	}
-	if (!check_for_ipv4(ipv4_addr, addr_len)) {
-		LOG_ERR("Invalid local address");
-		ret = -EINVAL;
-		goto exit;
-	}
-	if (inet_pton(AF_INET, ipv4_addr, &local.sin_addr) != 1) {
-		LOG_ERR("Parse local IP address failed: %d", -errno);
-		ret = -EINVAL;
-		goto exit;
-	}
+	if (proxy.family == AF_INET) {
+		char ipv4_addr[NET_IPV4_ADDR_LEN] = {0};
 
-	ret = bind(proxy.sock, (struct sockaddr *)&local, sizeof(struct sockaddr_in));
+		util_get_ip_addr(ipv4_addr, NULL);
+		if (strlen(ipv4_addr) == 0) {
+			LOG_ERR("Unable to obtain local IPv4 address");
+			ret = -ENETUNREACH;
+			goto exit;
+		}
+
+		struct sockaddr_in local = {
+			.sin_family = AF_INET,
+			.sin_port = htons(port)
+		};
+		if (inet_pton(AF_INET, ipv4_addr, &local.sin_addr) != 1) {
+			LOG_ERR("Parse local IPv4 address failed: %d", -errno);
+			ret = -EINVAL;
+			goto exit;
+		}
+		ret = bind(proxy.sock, (struct sockaddr *)&local, sizeof(struct sockaddr_in));
+	} else {
+		char ipv6_addr[NET_IPV6_ADDR_LEN] = {0};
+
+		util_get_ip_addr(NULL, ipv6_addr);
+		if (strlen(ipv6_addr) == 0) {
+			LOG_ERR("Unable to obtain local IPv6 address");
+			ret = -ENETUNREACH;
+			goto exit;
+		}
+
+		struct sockaddr_in6 local = {
+			.sin6_family = AF_INET6,
+			.sin6_port = htons(port)
+		};
+
+		if (inet_pton(AF_INET6, ipv6_addr, &local.sin6_addr) != 1) {
+			LOG_ERR("Parse local IPv6 address failed: %d", -errno);
+			ret = -EINVAL;
+			goto exit;
+		}
+		ret = bind(proxy.sock, (struct sockaddr *)&local, sizeof(struct sockaddr_in6));
+	}
 	if (ret) {
 		LOG_ERR("bind() failed: %d", -errno);
 		ret = -errno;
@@ -229,7 +250,7 @@ static int do_tcp_server_start(uint16_t port)
 			K_THREAD_STACK_SIZEOF(tcp_thread_stack),
 			tcpsvr_thread_func, NULL, NULL, NULL,
 			THREAD_PRIORITY, K_USER, K_NO_WAIT);
-	proxy.role = AT_TCP_ROLE_SERVER;
+	proxy.role = TCP_ROLE_SERVER;
 	sprintf(rsp_buf, "\r\n#XTCPSVR: %d,\"started\"\r\n", proxy.sock);
 	rsp_send(rsp_buf, strlen(rsp_buf));
 
@@ -243,8 +264,12 @@ exit:
 			if (slm_tls_unloadcrdl(proxy.sec_tag) != 0) {
 				LOG_ERR("Fail to unload credential");
 			}
+			proxy.sec_tag = INVALID_SEC_TAG;
 		}
 #endif
+	if (proxy.sock != INVALID_SOCKET) {
+		close(proxy.sock);
+	}
 		slm_at_tcp_proxy_init();
 		sprintf(rsp_buf, "\r\n#XTCPSVR: %d\r\n", ret);
 		rsp_send(rsp_buf, strlen(rsp_buf));
@@ -281,10 +306,9 @@ static int do_tcp_client_connect(const char *url,
 
 	/* Open socket */
 	if (proxy.sec_tag == INVALID_SEC_TAG) {
-		proxy.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		proxy.sock = socket(proxy.family, SOCK_STREAM, IPPROTO_TCP);
 	} else {
-		proxy.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
-
+		proxy.sock = socket(proxy.family, SOCK_STREAM, IPPROTO_TLS_1_2);
 	}
 	if (proxy.sock < 0) {
 		LOG_ERR("socket() failed: %d", -errno);
@@ -301,40 +325,6 @@ static int do_tcp_client_connect(const char *url,
 			ret = -errno;
 			goto exit;
 		}
-	}
-
-	/* Connect to remote host */
-	if (check_for_ipv4(url, strlen(url))) {
-		remote.sin_family = AF_INET;
-		remote.sin_port = htons(port);
-		LOG_DBG("IPv4 Address %s", log_strdup(url));
-		/* NOTE inet_pton() returns 1 as success */
-		ret = inet_pton(AF_INET, url, &remote.sin_addr);
-		if (ret != 1) {
-			LOG_ERR("inet_pton() failed: %d", ret);
-			ret = -EINVAL;
-			goto exit;
-		}
-	} else {
-		struct addrinfo *result;
-		struct addrinfo hints = {
-			.ai_family = AF_INET,
-			.ai_socktype = SOCK_STREAM
-		};
-
-		ret = getaddrinfo(url, NULL, &hints, &result);
-		if (ret || result == NULL) {
-			LOG_ERR("getaddrinfo() failed: %d", ret);
-			ret = -EINVAL;
-			goto exit;
-		}
-
-		remote.sin_family = AF_INET;
-		remote.sin_port = htons(port);
-		remote.sin_addr.s_addr =
-		((struct sockaddr_in *)result->ai_addr)->sin_addr.s_addr;
-		/* Free the address. */
-		freeaddrinfo(result);
 	}
 
 #if defined(CONFIG_SLM_DIAG)
@@ -357,9 +347,24 @@ static int do_tcp_client_connect(const char *url,
 			goto exit;
 		}
 	}
-	ret = connect(proxy.sock, (struct sockaddr *)&remote,
-		sizeof(struct sockaddr_in));
-	if (ret < 0) {
+
+	/* Connect to remote host */
+	struct sockaddr sa = {
+		.sa_family = AF_UNSPEC
+	};
+
+	ret = util_resolve_host(0, url, port, proxy.family, &sa);
+	if (ret) {
+		LOG_ERR("getaddrinfo() error: %s", log_strdup(gai_strerror(ret)));
+		goto exit;
+	}
+
+	if (sa.sa_family == AF_INET) {
+		ret = connect(proxy.sock, &sa, sizeof(struct sockaddr_in));
+	} else {
+		ret = connect(proxy.sock, &sa, sizeof(struct sockaddr_in6));
+	}
+	if (ret) {
 		LOG_ERR("connect() failed: %d", -errno);
 		ret = -errno;
 		goto exit;
@@ -377,9 +382,11 @@ static int do_tcp_client_connect(const char *url,
 			tcpcli_thread_func, NULL, NULL, NULL,
 			THREAD_PRIORITY, K_USER, K_NO_WAIT);
 
-	proxy.role = AT_TCP_ROLE_CLIENT;
+	proxy.role = TCP_ROLE_CLIENT;
 	sprintf(rsp_buf, "\r\n#XTCPCLI: %d,\"connected\"\r\n", proxy.sock);
 	rsp_send(rsp_buf, strlen(rsp_buf));
+
+	return 0;
 
 exit:
 	if (ret < 0) {
@@ -424,9 +431,9 @@ static int do_tcp_send(const uint8_t *data, int datalen)
 	uint32_t offset = 0;
 	int sock;
 
-	if (proxy.role == AT_TCP_ROLE_CLIENT && proxy.sock != INVALID_SOCKET) {
+	if (proxy.role == TCP_ROLE_CLIENT && proxy.sock != INVALID_SOCKET) {
 		sock = proxy.sock;
-	} else if (proxy.role == AT_TCP_ROLE_SERVER && proxy.sock_peer != INVALID_SOCKET) {
+	} else if (proxy.role == TCP_ROLE_SERVER && proxy.sock_peer != INVALID_SOCKET) {
 		sock = proxy.sock_peer;
 #if defined(CONFIG_SLM_CUSTOMIZED)
 		k_timer_stop(&conn_timer);
@@ -443,7 +450,7 @@ static int do_tcp_send(const uint8_t *data, int datalen)
 			sprintf(rsp_buf, "\r\n#XTCPSEND: %d\r\n", -errno);
 			rsp_send(rsp_buf, strlen(rsp_buf));
 			if (errno != EAGAIN && errno != ETIMEDOUT) {
-				if (proxy.role == AT_TCP_ROLE_CLIENT) {
+				if (proxy.role == TCP_ROLE_CLIENT) {
 					do_tcp_client_disconnect();
 				} else {
 					k_work_submit(&disconnect_work);
@@ -460,20 +467,30 @@ static int do_tcp_send(const uint8_t *data, int datalen)
 		rsp_send(rsp_buf, strlen(rsp_buf));
 #if defined(CONFIG_SLM_CUSTOMIZED)
 		/* restart activity timer */
-		if (proxy.role == AT_TCP_ROLE_SERVER) {
+		if (proxy.role == TCP_ROLE_SERVER) {
 			k_timer_start(&conn_timer, K_SECONDS(proxy.timeout),
 				      K_NO_WAIT);
 		}
 #endif
 #if defined(CONFIG_SLM_UI)
 		if (offset > 0) {
-			if (offset < NET_IPV4_MTU/3) {
-				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-			} else if (offset < 2*NET_IPV4_MTU/3) {
-				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			if(proxy.family == AF_INET) {
+				if (offset < NET_IPV4_MTU/3) {
+					ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+				} else if (offset < 2*NET_IPV4_MTU/3) {
+					ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+				} else {
+					ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+				}
 			} else {
-				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
-			}
+				if (offset < NET_IPV6_MTU/3) {
+					ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+				} else if (offset < 2*NET_IPV6_MTU/3) {
+					ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+				} else {
+					ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+				}
+			}				
 		}
 #endif
 		return 0;
@@ -488,9 +505,9 @@ static int do_tcp_send_datamode(const uint8_t *data, int datalen)
 	uint32_t offset = 0;
 	int sock;
 
-	if (proxy.role == AT_TCP_ROLE_CLIENT && proxy.sock != INVALID_SOCKET) {
+	if (proxy.role == TCP_ROLE_CLIENT && proxy.sock != INVALID_SOCKET) {
 		sock = proxy.sock;
-	} else if (proxy.role == AT_TCP_ROLE_SERVER && proxy.sock_peer != INVALID_SOCKET) {
+	} else if (proxy.role == TCP_ROLE_SERVER && proxy.sock_peer != INVALID_SOCKET) {
 		sock = proxy.sock_peer;
 #if defined(CONFIG_SLM_CUSTOMIZED)
 		k_timer_stop(&conn_timer);
@@ -505,7 +522,7 @@ static int do_tcp_send_datamode(const uint8_t *data, int datalen)
 		if (ret < 0) {
 			LOG_ERR("send() failed: %d", -errno);
 			if (errno != EAGAIN && errno != ETIMEDOUT) {
-				if (proxy.role == AT_TCP_ROLE_CLIENT) {
+				if (proxy.role == TCP_ROLE_CLIENT) {
 					do_tcp_client_disconnect();
 				} else {
 					k_work_submit(&disconnect_work);
@@ -522,7 +539,7 @@ static int do_tcp_send_datamode(const uint8_t *data, int datalen)
 #if defined(CONFIG_SLM_CUSTOMIZED)
 	if (ret >= 0) {
 		/* restart activity timer */
-		if (proxy.role == AT_TCP_ROLE_SERVER) {
+		if (proxy.role == TCP_ROLE_SERVER) {
 			k_timer_start(&conn_timer, K_SECONDS(proxy.timeout), K_NO_WAIT);
 		}
 	}
@@ -530,13 +547,23 @@ static int do_tcp_send_datamode(const uint8_t *data, int datalen)
 #endif
 #if defined(CONFIG_SLM_UI)
 	if (offset > 0) {
-		if (offset < NET_IPV4_MTU/3) {
+		if(proxy.family == AF_INET) {
+			if (offset < NET_IPV4_MTU/3) {
 			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-		} else if (offset < 2*NET_IPV4_MTU/3) {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else if (offset < 2*NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
 		} else {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
-		}
+			if (offset < NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (offset < 2*NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
+		}				
 	}
 #endif
 
@@ -557,16 +584,26 @@ static void tcp_data_handle(uint8_t *data, uint32_t length)
 	int ret;
 
 #if defined(CONFIG_SLM_UI)
-	if (length < NET_IPV4_MTU/3) {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-	} else if (length < 2*NET_IPV4_MTU/3) {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+	if(proxy.family == AF_INET) {
+		if (length < NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (length < 2*NET_IPV4_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
 	} else {
-		ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
-	}
+		if (length < NET_IPV6_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+		} else if (length < 2*NET_IPV6_MTU/3) {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		} else {
+			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+		}
+	}				
 #endif
 
-	if (proxy.role == AT_TCP_ROLE_CLIENT || tcpsvr_state == TCPSVR_CONNECTED) {
+	if (proxy.role == TCP_ROLE_CLIENT || tcpsvr_state == TCPSVR_CONNECTED) {
 		if (proxy.datamode) {
 			rsp_send(data, length);
 		} else if (slm_util_hex_check(data, length)) {
@@ -667,10 +704,10 @@ static int tcp_datamode_callback(uint8_t op, const uint8_t *data, int len)
 		ret = do_tcp_send_datamode(data, len);
 		LOG_DBG("datamode send: %d", ret);
 	} else if (op == DATAMODE_EXIT) {
-		if (proxy.role == AT_TCP_ROLE_CLIENT) {
+		if (proxy.role == TCP_ROLE_CLIENT) {
 			proxy.datamode = false;
 		}
-		if (proxy.role == AT_TCP_ROLE_SERVER && proxy.sock_peer != INVALID_SOCKET) {
+		if (proxy.role == TCP_ROLE_SERVER && proxy.sock_peer != INVALID_SOCKET) {
 			k_work_submit(&disconnect_work);
 		}
 	}
@@ -684,7 +721,7 @@ static int tcpsvr_input(int infd)
 
 	if (fds[infd].fd == proxy.sock) {
 		socklen_t len = sizeof(struct sockaddr_in);
-		char peer_addr[INET_ADDRSTRLEN];
+		char peer_addr[INET6_ADDRSTRLEN];
 		bool filtered = true;
 
 		/* If server auto-accept is on, accept this connection.
@@ -698,8 +735,13 @@ static int tcpsvr_input(int infd)
 				return 0;
 			} else if (proxy.ar == AT_TCP_SVR_AR_REJECT) {
 				proxy.ar = AT_TCP_SVR_AR_UNKNOWN;
-				ret = accept(proxy.sock,
-					     (struct sockaddr *)&remote, &len);
+				if(proxy.family == AF_INET){	
+					ret = accept(proxy.sock,
+							(struct sockaddr *)&remote, &len);
+				} else {
+					ret = accept(proxy.sock,
+							(struct sockaddr *)&remotev6, &len);
+				}
 				if (ret >= 0) {
 					close(ret);
 				}
@@ -708,8 +750,13 @@ static int tcpsvr_input(int infd)
 				proxy.ar = AT_TCP_SVR_AR_UNKNOWN;
 			}
 		}
-		ret = accept(proxy.sock,
-				(struct sockaddr *)&remote, &len);
+		if(proxy.family == AF_INET){	
+			ret = accept(proxy.sock,
+					(struct sockaddr *)&remote, &len);
+		} else {
+			ret = accept(proxy.sock,
+					(struct sockaddr *)&remotev6, &len);			
+		}
 		LOG_DBG("accept(): %d", ret);
 		if (ret < 0) {
 			LOG_ERR("accept() failed: %d", -errno);
@@ -725,12 +772,22 @@ static int tcpsvr_input(int infd)
 			return -ECONNREFUSED;
 		}
 		/* Client IPv4 filtering */
-		if (inet_ntop(AF_INET, &remote.sin_addr, peer_addr,
-			INET_ADDRSTRLEN) == NULL) {
-			LOG_ERR("inet_ntop() failed: %d", -errno);
-			close(ret);
-			return -errno;
-		}
+		if(proxy.family == AF_INET){
+			if (inet_ntop(AF_INET, &remote.sin_addr, peer_addr,
+				INET_ADDRSTRLEN) == NULL) {
+				LOG_ERR("inet_ntop() failed: %d", -errno);
+				close(ret);
+				return -errno;
+			}
+		/* Client IPv6 filtering */
+		} else {
+			if (inet_ntop(AF_INET6, &remotev6.sin6_addr, peer_addr,
+				INET6_ADDRSTRLEN) == NULL) {
+				LOG_ERR("inet_ntop() failed: %d", -errno);
+				close(ret);
+				return -errno;
+			}
+		}		
 		if (proxy.filtermode) {
 			for (int i = 0; i < CONFIG_SLM_TCP_FILTER_SIZE; i++) {
 				if (strlen(ip_allowlist[i]) > 0 &&
@@ -875,6 +932,7 @@ exit:
 		if (ret < 0) {
 			LOG_ERR("Fail to unload credential: %d", ret);
 		}
+		proxy.sec_tag = INVALID_SEC_TAG;
 	}
 #endif
 	in_datamode = proxy.datamode;
@@ -998,7 +1056,7 @@ int handle_at_tcp_filter(enum at_cmd_type cmd_type)
 			return err;
 		}
 		if (op == AT_FILTER_SET) {
-			char address[INET_ADDRSTRLEN];
+			char address[INET6_ADDRSTRLEN];
 			int size;
 
 			if (param_count > (CONFIG_SLM_TCP_FILTER_SIZE + 2)) {
@@ -1006,12 +1064,12 @@ int handle_at_tcp_filter(enum at_cmd_type cmd_type)
 			}
 			memset(ip_allowlist, 0x00, sizeof(ip_allowlist));
 			for (int i = 2; i < param_count; i++) {
-				size = INET_ADDRSTRLEN;
+				size = INET6_ADDRSTRLEN;
 				err = util_string_get(&at_param_list, i, address, &size);
 				if (err) {
 					return err;
 				}
-				if (!check_for_ipv4(address, size)) {
+				if (!check_for_ip_format(address, size)) {
 					return -EINVAL;
 				}
 				memcpy(ip_allowlist[i - 2], address, size);
@@ -1079,7 +1137,8 @@ int handle_at_tcp_server(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		if (op == AT_SERVER_START || op == AT_SERVER_START_WITH_DATAMODE) {
+		if (op == SERVER_START || op == SERVER_START_WITH_DATAMODE 
+				|| op == SERVER_START6 || op == SERVER_START6_WITH_DATAMODE) {
 			if (proxy.sock != INVALID_SOCKET) {
 				LOG_ERR("Server is already running.");
 				return -EINVAL;
@@ -1105,25 +1164,38 @@ int handle_at_tcp_server(enum at_cmd_type cmd_type)
 			}
 #endif
 #if defined(CONFIG_SLM_DATAMODE_HWFC)
-			if (op == AT_SERVER_START_WITH_DATAMODE && !check_uart_flowcontrol()) {
+			if ((op == SERVER_START_WITH_DATAMODE || op == SERVER_START6_WITH_DATAMODE)
+					 && !check_uart_flowcontrol()) {
 				LOG_ERR("Data mode requires HWFC.");
 				return -EINVAL;
 			}
 #endif
+			if(op == SERVER_START || op == SERVER_START_WITH_DATAMODE) {
+				proxy.family = AF_INET;
+			}
+			else if(op == SERVER_START6 || op == SERVER_START6_WITH_DATAMODE) {
+				proxy.family = AF_INET6;
+			}
+			else {
+				proxy.family = AF_UNSPEC;
+			}
+
 			err = do_tcp_server_start((uint16_t)port);
-			if (err == 0 && op == AT_SERVER_START_WITH_DATAMODE) {
+			if (err == 0 && (op == SERVER_START_WITH_DATAMODE 
+				|| op == SERVER_START6_WITH_DATAMODE)) {
 				proxy.datamode = true;
 			}
-		} else if (op == AT_SERVER_STOP) {
+		} else if (op == SERVER_STOP) {
 			err = do_tcp_server_stop();
 		} break;
 
 	case AT_CMD_TYPE_READ_COMMAND:
 #if defined(CONFIG_SLM_CUSTOMIZED)
 		if (proxy.sock != INVALID_SOCKET &&
-		    proxy.role == AT_TCP_ROLE_SERVER) {
-			sprintf(rsp_buf, "\r\n#XTCPSVR: %d,%d,%d,%d\r\n",
-				proxy.sock, proxy.sock_peer, proxy.timeout, proxy.datamode);
+		    proxy.role == TCP_ROLE_SERVER) {
+			sprintf(rsp_buf, "\r\n#XTCPSVR: %d,%d,%d,%d,%d\r\n",
+				proxy.sock, proxy.sock_peer, proxy.timeout, proxy.datamode, 
+					proxy.family);
 		} else {
 			sprintf(rsp_buf, "\r\n#XTCPSVR: %d,%d\r\n",
 				INVALID_SOCKET, INVALID_SOCKET);
@@ -1138,12 +1210,13 @@ int handle_at_tcp_server(enum at_cmd_type cmd_type)
 
 	case AT_CMD_TYPE_TEST_COMMAND:
 #if defined(CONFIG_SLM_CUSTOMIZED)
-		sprintf(rsp_buf, "\r\n#XTCPSVR: (%d,%d,%d),<port>,<timeout>,<sec_tag>\r\n",
-			AT_SERVER_STOP, AT_SERVER_START,
-			AT_SERVER_START_WITH_DATAMODE);
+		sprintf(rsp_buf, "\r\n#XTCPSVR: (%d,%d,%d,%d,%d),<port>,<timeout>,<sec_tag>\r\n",
+			SERVER_STOP, SERVER_START,SERVER_START_WITH_DATAMODE,
+			SERVER_START6, SERVER_START6_WITH_DATAMODE);
 #else
-		sprintf(rsp_buf, "\r\n#XTCPSVR: (%d,%d,%d),<port>,<sec_tag>\r\n",
-			AT_SERVER_STOP, AT_SERVER_START, AT_SERVER_START_WITH_DATAMODE);
+		sprintf(rsp_buf, "\r\n#XTCPSVR: (%d,%d,%d,%d,%d),<port>,<sec_tag>\r\n",
+			SERVER_STOP, SERVER_START, SERVER_START_WITH_DATAMODE,
+			SERVER_START6, SERVER_START6_WITH_DATAMODE);
 #endif
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
@@ -1260,12 +1333,13 @@ int handle_at_tcp_client(enum at_cmd_type cmd_type)
 		if (err) {
 			return err;
 		}
-		if (op == AT_CLIENT_CONNECT || op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
+		if (op == CLIENT_CONNECT || op == CLIENT_CONNECT_WITH_DATAMODE 
+			|| op == CLIENT_CONNECT6 || op == CLIENT_CONNECT6_WITH_DATAMODE) {
 			uint16_t port;
-			char url[TCPIP_MAX_URL];
-			char hostname[TCPIP_MAX_URL];
-			int size = TCPIP_MAX_URL;
-			int hn_size = TCPIP_MAX_URL;
+			char url[SLM_MAX_URL];
+			char hostname[SLM_MAX_URL];
+			int size = SLM_MAX_URL;
+			int hn_size = SLM_MAX_URL;
 
 			memset(url, 0, sizeof(url));
 			memset(hostname, 0, sizeof(hostname));
@@ -1291,17 +1365,26 @@ int handle_at_tcp_client(enum at_cmd_type cmd_type)
 				}
 			}
 #if defined(CONFIG_SLM_DATAMODE_HWFC)
-			if (op == AT_CLIENT_CONNECT_WITH_DATAMODE && !check_uart_flowcontrol()) {
+			if ((op == AT_CLIENT_CONNECT_WITH_DATAMODE || op == AT_CLIENT_CONNECT6_WITH_DATAMODE) && !check_uart_flowcontrol()) {
 				LOG_ERR("Data mode requires HWFC.");
 				return -EINVAL;
 			}
 #endif
+			if(op == CLIENT_CONNECT || op == CLIENT_CONNECT_WITH_DATAMODE){
+				proxy.family = AF_INET;
+			} else if (op == CLIENT_CONNECT6 || op == CLIENT_CONNECT6_WITH_DATAMODE) {
+				proxy.family = AF_INET6;
+			} else {
+				proxy.family = AF_UNSPEC;
+			}
+
 			err = do_tcp_client_connect(url, hostname, (uint16_t)port);
-			if (err == 0 && op == AT_CLIENT_CONNECT_WITH_DATAMODE) {
+			if (err == 0 && (op == CLIENT_CONNECT_WITH_DATAMODE
+				|| op == CLIENT_CONNECT6_WITH_DATAMODE)) {
 				proxy.datamode = true;
 				enter_datamode(tcp_datamode_callback);
 			}
-		} else if (op == AT_CLIENT_DISCONNECT) {
+		} else if (op == CLIENT_DISCONNECT) {
 			err = do_tcp_client_disconnect();
 		} break;
 
@@ -1312,8 +1395,9 @@ int handle_at_tcp_client(enum at_cmd_type cmd_type)
 		break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "\r\n#XTCPCLI: (%d,%d,%d),<url>,<port>,<sec_tag>,<hostname>\r\n",
-			AT_CLIENT_DISCONNECT, AT_CLIENT_CONNECT, AT_CLIENT_CONNECT_WITH_DATAMODE);
+		sprintf(rsp_buf, "\r\n#XTCPCLI: (%d,%d,%d,%d,%d),<url>,<port>,<sec_tag>,<hostname>\r\n",
+			CLIENT_DISCONNECT, CLIENT_CONNECT, CLIENT_CONNECT_WITH_DATAMODE,
+			CLIENT_CONNECT6, CLIENT_CONNECT6_WITH_DATAMODE);
 		rsp_send(rsp_buf, strlen(rsp_buf));
 		err = 0;
 		break;
@@ -1334,8 +1418,8 @@ int handle_at_tcp_send(enum at_cmd_type cmd_type)
 {
 	int err = -EINVAL;
 	uint16_t datatype;
-	char data[NET_IPV4_MTU];
-	int size = NET_IPV4_MTU;
+	char data[SLM_MAX_PAYLOAD + 1] = {0};
+	int size = SLM_MAX_PAYLOAD + 1;
 
 	switch (cmd_type) {
 	case AT_CMD_TYPE_SET_COMMAND:
@@ -1506,6 +1590,7 @@ int slm_at_tcp_proxy_init(void)
 	proxy.timeout = CONFIG_SLM_TCP_CONN_TIME;
 #endif
 	proxy.sec_tag = INVALID_SEC_TAG;
+	proxy.family = AF_UNSPEC;
 	nfds = 0;
 	for (int i = 0; i < MAX_POLL_FD; i++) {
 		fds[i].fd = INVALID_SOCKET;
@@ -1523,10 +1608,10 @@ int slm_at_tcp_proxy_init(void)
  */
 int slm_at_tcp_proxy_uninit(void)
 {
-	if (proxy.role == AT_TCP_ROLE_CLIENT) {
+	if (proxy.role == TCP_ROLE_CLIENT) {
 		return do_tcp_client_disconnect();
 	}
-	if (proxy.role == AT_TCP_ROLE_SERVER) {
+	if (proxy.role == TCP_ROLE_SERVER) {
 		return do_tcp_server_stop();
 	}
 

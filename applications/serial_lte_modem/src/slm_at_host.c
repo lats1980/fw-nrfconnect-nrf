@@ -85,7 +85,7 @@ int slm_setting_uart_save(void);
 
 /* global variable used across different files */
 struct at_param_list at_param_list;         /* For AT parser */
-char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2]; /* SLM URC and socket data */
+char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN]; /* SLM URC and socket data */
 uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];  /* Socket RX raw data */
 uint16_t datamode_time_limit;               /* Send trigger by time in data mode */
 
@@ -317,7 +317,7 @@ static void raw_send(struct k_work *work)
 	/* NOTE ring_buf_get_claim() might not return full size */
 	do {
 		size_send = ring_buf_get_claim(&data_rb, &data, sizeof(at_buf));
-		if (size_send > 0) {
+		if (data != NULL && size_send > 0) {
 			LOG_INF("Raw send %d", size_send);
 			LOG_HEXDUMP_DBG(data, MIN(size_send, HEXDUMP_DATAMODE_MAX), "RX-DATAMODE");
 			if (datamode_handler) {

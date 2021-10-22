@@ -18,12 +18,8 @@
 #include <drivers/gpio.h>
 #endif
 
-LOG_MODULE_REGISTER(ftp, CONFIG_SLM_LOG_LEVEL);
+LOG_MODULE_REGISTER(slm_ftp, CONFIG_SLM_LOG_LEVEL);
 
-#define INVALID_SEC_TAG		-1
-#define FTP_MAX_HOSTNAME	64
-#define FTP_MAX_USERNAME	32
-#define FTP_MAX_PASSWORD	32
 #define FTP_MAX_OPTION		32
 #define FTP_MAX_FILEPATH	128
 
@@ -108,7 +104,7 @@ static ftp_op_list_t ftp_op_list[FTP_OP_MAX] = {
 	{FTP_OP_MPUT, "mput", do_ftp_mput},
 };
 
-RING_BUF_DECLARE(ftp_data_buf, CONFIG_SLM_SOCKET_RX_MAX * 2);
+RING_BUF_DECLARE(ftp_data_buf, CONFIG_AT_CMD_RESPONSE_MAX_LEN);
 
 /* global functions defined in different files */
 void rsp_send(const uint8_t *str, size_t len);
@@ -118,7 +114,7 @@ bool check_uart_flowcontrol(void);
 
 /* global variable defined in different files */
 extern struct at_param_list at_param_list;
-extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 extern uint8_t rx_data[CONFIG_SLM_SOCKET_RX_MAX];
 
 #if defined(CONFIG_SLM_CUSTOMIZED_RS232)
@@ -175,6 +171,7 @@ void ftp_ctrl_callback(const uint8_t *msg, uint16_t len)
 static int ftp_data_save(uint8_t *data, uint32_t length)
 {
 	if (ring_buf_space_get(&ftp_data_buf) < length) {
+		LOG_WRN("FTP buffer overflow");
 		return -1; /* RX overrun */
 	}
 
@@ -215,12 +212,12 @@ void ftp_data_callback(const uint8_t *msg, uint16_t len)
 static int do_ftp_open(void)
 {
 	int ret = 0;
-	char username[FTP_MAX_USERNAME] = "";  /* DO initialize, in case of login error */
-	int sz_username = FTP_MAX_USERNAME;
-	char password[FTP_MAX_PASSWORD] = "";  /* DO initialize, in case of login error */
-	int sz_password = FTP_MAX_PASSWORD;
-	char hostname[FTP_MAX_HOSTNAME];
-	int sz_hostname = FTP_MAX_HOSTNAME;
+	char username[SLM_MAX_USERNAME] = "";  /* DO initialize, in case of login error */
+	int sz_username = sizeof(username);
+	char password[SLM_MAX_PASSWORD] = "";  /* DO initialize, in case of login error */
+	int sz_password = sizeof(password);
+	char hostname[SLM_MAX_URL];
+	int sz_hostname = sizeof(hostname);
 	uint16_t port = CONFIG_SLM_FTP_SERVER_PORT;
 	sec_tag_t sec_tag = INVALID_SEC_TAG;
 	int param_count = at_params_valid_count_get(&at_param_list);
@@ -254,7 +251,7 @@ static int do_ftp_open(void)
 	}
 
 	/* FTP open */
-	ret = ftp_open(hostname, (uint16_t)port, sec_tag);
+	ret = ftp_open(hostname, port, sec_tag);
 	if (ret != FTP_CODE_200) {
 		return -ENETUNREACH;
 	}

@@ -26,7 +26,7 @@ int poweroff_uart(void);
 
 /* global variable defined in different resources */
 extern struct at_param_list at_param_list;
-extern char rsp_buf[CONFIG_SLM_SOCKET_RX_MAX * 2];
+extern char rsp_buf[CONFIG_AT_CMD_RESPONSE_MAX_LEN];
 
 const struct device *gpio_dev;
 #if defined(CONFIG_SLM_CUSTOMIZED_RS232)
