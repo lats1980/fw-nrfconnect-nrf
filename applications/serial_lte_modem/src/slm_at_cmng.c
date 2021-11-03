@@ -13,6 +13,7 @@
 #include "slm_util.h"
 #include "slm_native_tls.h"
 #include "slm_at_cmng.h"
+#include "slm_native_tls_ps.h"
 
 LOG_MODULE_REGISTER(cmng, CONFIG_SLM_LOG_LEVEL);
 
@@ -31,6 +32,9 @@ enum slm_xcmng_type {
 	AT_XCMNG_TYPE_PRIV,
 	AT_XCMNG_TYPE_PSK,
 	AT_XCMNG_TYPE_PSK_ID,
+	AT_XCMNG_TYPE_ENDORSEMENT_KEY = 8,
+	AT_XCMNG_TYPE_NORDIC_ROOT_CA = 10,
+	AT_XCMNG_TYPE_NORDIC_BASE_PUBKEY = 11,
 };
 
 #define MODEM_KEY_MGMT_OP_LS "AT%CMNG=1"
@@ -146,12 +150,15 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 		if (op == AT_XCMNG_OP_LIST) {
 			int written;
 			char cmd[32];
-			enum at_cmd_state state;
 
 			written = snprintf(cmd, sizeof(cmd), "%s", MODEM_KEY_MGMT_OP_LS);
 			if (written < 0 || written >= sizeof(cmd)) {
 				return -ENOBUFS;
 			}
+#if defined(CONFIG_SLM_NATIVE_TLS_PS)
+			slm_tls_tbl_dump();
+#else
+			enum at_cmd_state state;
 			err = at_cmd_write(cmd, rsp_buf, CONFIG_AT_CMD_RESPONSE_MAX_LEN, &state);
 			if (err) {
 				return -EINVAL;
@@ -163,7 +170,6 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 				while( (ch = strstr(ch,"%CMNG: ")) != NULL) {
 					char xrsp_buf[32];
 					unsigned int ctag = 0, ctype = 0;
-
 					/* remap sec_tag and type */
 					sscanf(ch, "%*s%u,%u", &ctag, &ctype);
 					if ((ctype == AT_XCMNG_TYPE_CA_CERT) && (ctag >= MIN_NATIVE_TLS_SEC_TAG)
@@ -174,6 +180,7 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 					ch = ch + strlen("%CMNG: ");
 				}
 			}
+#endif
 			return 0;
 		}
 		if (at_params_valid_count_get(&at_param_list) < 4) {
@@ -211,14 +218,20 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 			}
 			err = slm_tls_storage_set(sec_tag, type, content, len);
 			if (err != 0) {
+#if defined(CONFIG_SLM_NATIVE_TLS_PS)
+				LOG_ERR("FAILED! slm_tls_ps_set() = %d",
+					err);
+#else
 				LOG_ERR("FAILED! modem_key_mgmt_write() = %d",
 					err);
+#endif
 			}
 			k_free(content);
 		} else if (op == AT_XCMNG_OP_READ) {
 			if (type == AT_XCMNG_TYPE_CERT ||
 			   type == AT_XCMNG_TYPE_PRIV ||
-			   type == AT_XCMNG_TYPE_PSK) {
+			   type == AT_XCMNG_TYPE_PSK ||
+			   type == AT_XCMNG_TYPE_NORDIC_ROOT_CA) {
 				/* Not supported */
 				LOG_ERR("Not support READ for type: %d", type);
 				return -EPERM;
@@ -228,8 +241,13 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 						CONFIG_AT_CMD_RESPONSE_MAX_LEN,
 						&len);
 			if (err != 0) {
+#if defined(CONFIG_SLM_NATIVE_TLS_PS)
+				LOG_ERR("FAILED! slm_tls_ps_get() = %d",
+					err);
+#else
 				LOG_ERR("FAILED! modem_key_mgmt_read() = %d",
 					err);
+#endif
 			} else {
 				*(content + len) = '\0';
 				sprintf(rsp_buf, "#XCMNG: %d,%d,\"\","
@@ -240,8 +258,13 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 		} else if (op == AT_XCMNG_OP_DELETE) {
 			err = slm_tls_storage_remove(sec_tag, type);
 			if (err != 0) {
+#if defined(CONFIG_SLM_NATIVE_TLS_PS)
+				LOG_ERR("FAILED! slm_tls_ps_remove() = %d",
+					err);
+#else
 				LOG_ERR("FAILED! modem_key_mgmt_delete() = %d",
 					err);
+#endif
 			}
 		}
 		break;

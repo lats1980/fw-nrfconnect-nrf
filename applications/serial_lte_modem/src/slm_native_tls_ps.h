@@ -15,7 +15,6 @@
  * @brief Storage of TLS credentials using PSA Protected Storage API
  * @{
  */
-
 /**
  * @brief Store a TLS credential in Protected Storage
  *
@@ -50,6 +49,22 @@ int slm_tls_ps_get(sec_tag_t sec_tag, uint16_t type, void *buf, size_t buf_len,
  * @return 0 if successful, negative error code if failure.
  */
 int slm_tls_ps_remove(sec_tag_t sec_tag, uint16_t type);
+
+/**
+ * @brief Get a TLS credential table from Protected Storage
+ *
+ * @param[out] buf Buffer in which to write the credential table
+ * @param[out] len Size of the credential table
+ *
+ * @return 0 if successful, negative error code if failure.
+ */
+int slm_tls_tbl_get(void *buf, size_t *len);
+
+/**
+ * @brief Print TLS credential table from Protected Storage to AT response.
+ * *
+ */
+void slm_tls_tbl_dump(void);
 
 /** @} */
 

@@ -21,6 +21,7 @@
 #define MAX_MODEM_TLS_SEC_TAG 99
 #define MIN_NATIVE_TLS_SEC_TAG 100
 #define MAX_NATIVE_TLS_SEC_TAG 199
+#define NATIVE_TLS_SEC_TAG_COUNT (MAX_NATIVE_TLS_SEC_TAG - MIN_NATIVE_TLS_SEC_TAG + 1)
 
 /**
  * @brief Map SLM security tag to nRF security tag

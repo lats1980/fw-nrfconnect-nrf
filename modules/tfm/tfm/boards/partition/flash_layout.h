@@ -97,7 +97,7 @@
 
 #ifdef PM_TFM_EXTRA_ADDRESS
 #define FLASH_PS_AREA_OFFSET            (PM_TFM_EXTRA_ADDRESS)
-#define FLASH_PS_AREA_SIZE              (0x4000)   /* 16 KB */
+#define FLASH_PS_AREA_SIZE              (0x11000)   /* 68 KB */
 
 /* Internal Trusted Storage (ITS) Service definitions */
 #define FLASH_ITS_AREA_OFFSET           (FLASH_PS_AREA_OFFSET + \

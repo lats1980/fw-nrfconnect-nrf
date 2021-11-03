@@ -37,3 +37,9 @@ add_subdirectory_ifdef(CONFIG_SLM_HW_REV src/hw_rev)
 add_subdirectory_ifdef(CONFIG_SLM_UC src/user_config)
 
 zephyr_include_directories(src)
+
+set_property(TARGET zephyr_property_target
+             APPEND PROPERTY TFM_CMAKE_OPTIONS
+             -DPS_MAX_ASSET_SIZE=2048
+             -DPS_NUM_ASSETS=30
+)
