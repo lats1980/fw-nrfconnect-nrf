@@ -202,7 +202,8 @@ static int do_udp_client_connect(const char *url, uint16_t port, int sec_tag)
 		LOG_ERR("socket() failed: %d", -errno);
 		sprintf(rsp_buf, "\r\n#XUDPCLI: %d\r\n", -errno);
 		rsp_send(rsp_buf, strlen(rsp_buf));
-		return -errno;
+		ret = -errno;
+		goto exit;
 	}
 	if (sec_tag != INVALID_SEC_TAG) {
 		sec_tag_t sec_tag_list[1] = { sec_tag };
@@ -213,8 +214,8 @@ static int do_udp_client_connect(const char *url, uint16_t port, int sec_tag)
 			LOG_ERR("set tag list failed: %d", -errno);
 			sprintf(rsp_buf, "\r\n#XUDPCLI: %d\r\n", -errno);
 			rsp_send(rsp_buf, strlen(rsp_buf));
-			close(proxy.sock);
-			return -errno;
+			ret = -errno;
+			goto exit;
 		}
 	}
 
@@ -239,8 +240,8 @@ static int do_udp_client_connect(const char *url, uint16_t port, int sec_tag)
 		LOG_ERR("connect() failed: %d", -errno);
 		sprintf(rsp_buf, "\r\n#XUDPCLI: %d\r\n", -errno);
 		rsp_send(rsp_buf, strlen(rsp_buf));
-		close(proxy.sock);
-		return -errno;
+		ret = -errno;
+		goto exit;
 	}
 
 	udp_thread_id = k_thread_create(&udp_thread, udp_thread_stack,
@@ -595,7 +596,7 @@ int handle_at_udp_server(enum at_cmd_type cmd_type)
 		break;
 
 	case AT_CMD_TYPE_TEST_COMMAND:
-		sprintf(rsp_buf, "\r\n#XUDPSVR: (%d,%d,%d,%d,%d),<port>,<sec_tag>\r\n",
+		sprintf(rsp_buf, "\r\n#XUDPSVR: (%d,%d,%d,%d,%d),<port>\r\n",
 			SERVER_STOP, SERVER_START, SERVER_START_WITH_DATAMODE,
 			SERVER_START6, SERVER_START6_WITH_DATAMODE);
 		rsp_send(rsp_buf, strlen(rsp_buf));

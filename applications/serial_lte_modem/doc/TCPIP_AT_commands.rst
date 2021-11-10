@@ -38,7 +38,8 @@ Syntax
   It indicates to the modem the credential of the security tag used for establishing a secure connection.
   It is associated with the certificate or PSK.
   Specifying the ``<sec_tag>`` is mandatory when opening a socket.
-  When TLS/DTLS is expected, the credentials should be stored on the modem side by ``AT%XCMNG`` or by the Nordic nRF Connect/LTE Link Monitor tool.
+  When TLS/DTLS is expected, the client credentials should be stored on the modem side by ``AT%CMNG`` or by the Nordic nRF Connect/LTE Link Monitor tool.
+  The server credentials should be stored on TF-M size by ``AT#XCMNG``.
   The modem needs to be in the offline state.
   The DTLS server is not supported.
 
@@ -338,7 +339,7 @@ Examples
    OK
 
 Secure Socket options #XSSOCKETOPT
-=================================
+==================================
 
 The ``#XSSOCKETOPT`` command allows you to set secure socket options.
 
@@ -1102,13 +1103,17 @@ The set command allows you to start and stop the TCP server.
 Syntax
 ~~~~~~
 
+.. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is enabled.
+
 ::
-   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is enabled.
+
    #XTCPSVR=<op>[,<port>,<timeout>,[sec_tag]]
 
-   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is disabled.
-   #XTCPSVR=<op>[,<port>[,<sec_tag>]]
+.. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is disabled.
 
+::
+
+   #XTCPSVR=<op>[,<port>[,<sec_tag>]]
 
 * The ``<op>`` parameter can accept one of the following values:
 
@@ -1190,11 +1195,17 @@ Syntax
 Response syntax
 ~~~~~~~~~~~~~~~
 
+
+.. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is enabled.
+
 ::
-   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is enabled.
+
    #XTCPSVR: <listen_socket_handle>,<income_socket_handle>,<timeout>,<data_mode>,<family>
 
-   .. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is disabled.
+.. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is disabled.
+
+::
+
    #XTCPSVR: <listen_socket_handle>,<income_socket_handle>,<data_mode>
 
 The ``<handle>`` value is an integer.
@@ -1239,8 +1250,16 @@ Syntax
 Response syntax
 ~~~~~~~~~~~~~~~
 
-::
+.. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is enabled.
 
+:: 
+
+   #XTCPSVR: (list of op value),<port>,<timeout>,<sec_tag>
+
+.. option:: CONFIG_SLM_CUSTOMIZED - Flag for customized functionality .. is disabled.
+
+::
+ 
    #XTCPSVR: (list of op value),<port>,<sec_tag>
 
 Examples
@@ -1249,7 +1268,7 @@ Examples
 ::
 
    AT#XTCPSVR=?
-   #XTCPSVR: (0,1,2),<port>,<sec_tag>
+   #XTCPSVR: (0,1,2,3,4),<port>,<timeout>,<sec_tag>
    OK
 
 TCP/TLS client #XTCPCLI
@@ -1267,7 +1286,7 @@ Syntax
 
 ::
 
-   #XTCPCLI=<op>[,<url>,<port>[,[sec_tag]]
+   #XTCPCLI=<op>[,<url>,<port>[,[sec_tag],[hostname]]
 
 * The ``<op>`` parameter can accept one of the following values:
 
@@ -1286,6 +1305,10 @@ Syntax
   It is mandatory for starting the server.
 * The ``<sec_tag>`` parameter is an integer.
   It indicates to the modem the credential of the security tag used for establishing a secure connection.
+* The ``<hostname>`` parameter is a string.
+  It indicates the hostname been used to verify certificate.
+  Its maximum size is 128 bytes.
+  When ``<url>`` is ip address, this paramater should be assigned.
 
 Response syntax
 ~~~~~~~~~~~~~~~
@@ -1304,7 +1327,8 @@ Unsolicited notification
 The ``<error>`` value is a negative integer.
 It represents the error value according to the standard POSIX *errorno*.
 
-When TLS/DTLS is expected, the credentials should be stored on the modem side by ``AT%XCMNG`` or by the Nordic nRF Connect/LTE Link Monitor tool.
+When TLS/DTLS is expected, the credentials should be stored on the modem side by ``AT%CMNG`` or by the Nordic nRF Connect/LTE Link Monitor tool.
+The server credentials should be stored on TF-M size by ``AT#XCMNG``.
 The modem needs to be in the offline state.
 
 ::
@@ -1373,7 +1397,7 @@ Syntax
 
 ::
 
-   #XTCPCLI: (op list),<url>,<port>,<sec_tag>
+   #XTCPCLI: (op list),<url>,<port>,<sec_tag>,<hostname>
 
 Examples
 ~~~~~~~~
@@ -1381,7 +1405,7 @@ Examples
 ::
 
    AT#XTCPCLI=?
-   #XTCPCLI: (0,1,2),<url>,<port>,<sec_tag>
+   #XTCPCLI: (0,1,2),<url>,<port>,<sec_tag>,<hostname>
    OK
 
 TCP send data #XTCPSEND
@@ -1613,7 +1637,7 @@ Response syntax
 
 ::
 
-   #XUDPSVR: (list of op value),<port>,<sec_tag>
+   #XUDPSVR: (list of op value),<port>
 
 Examples
 ~~~~~~~~
@@ -1621,7 +1645,7 @@ Examples
 ::
 
    AT#XUDPSVR=?
-   #XUDPSVR: (0,1,2),<port>,<sec_tag>
+   #XUDPSVR: (0,1,2),<port>
    OK
 
 UDP/DTLS client #XUDPCLI
