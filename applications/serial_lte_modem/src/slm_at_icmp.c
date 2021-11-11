@@ -93,8 +93,11 @@ static uint16_t check_ics(const uint8_t *buffer, int len)
 		}
 	}
 
-	while (hcs > 0xFFFF) {
+	if (hcs > 0xFFFF) {
 		hcs = (hcs & 0xFFFF) + (hcs >> 16);
+		if (hcs > 0xFFFF) {
+			hcs = (hcs & 0xFFFF) + (hcs >> 16);
+		}
 	}
 
 	return ~hcs;    /* One's complement */
@@ -349,7 +352,7 @@ wait_for_data:
 		pllen = (buf[2] << 8) + buf[3]; /* Raw socket payload length */
 	} else {
 		/* Check ICMP6 CRC */
-		uint32_t hcs = check_ics(buf + 8, 32);   /* Pseudo header source + dest */
+		uint32_t hcs = check_ics(buf + 8, 32); /* Pseudo header source + dest */
 		uint8_t tbuf[2];
 
 		hcs += check_ics(buf + 4, 2);   /* Pseudo header packet length */
@@ -457,9 +460,8 @@ void ping_task(struct k_work *item)
 static int ping_test_handler(const char *target)
 {
 	int ret;
-	struct addrinfo *res;
 
-	ret = getaddrinfo(target, NULL, NULL, &res);
+	ret = getaddrinfo(target, NULL, NULL, &ping_argv.dest);
 	if (ret != 0) {
 		LOG_ERR("getaddrinfo(dest) error: %d", ret);
 		sprintf(rsp_buf, "\"%s\"\r\n", gai_strerror(ret));
@@ -468,48 +470,44 @@ static int ping_test_handler(const char *target)
 	}
 
 	/* Use the first result to decide which address family to use */
-	if (res->ai_family == AF_INET) {
+	if (ping_argv.dest->ai_family == AF_INET) {
 		char ipv4_addr[NET_IPV4_ADDR_LEN] = {0};
 
 		LOG_INF("Ping target's IPv4 address");
 		util_get_ip_addr(ipv4_addr, NULL);
 		if (strlen(ipv4_addr) == 0) {
 			LOG_ERR("Unable to obtain local IPv4 address");
-			freeaddrinfo(res);
+			freeaddrinfo(ping_argv.dest);
 			return -1;
 		}
 
-		ping_argv.dest = res;
-		res = NULL;
-		ret = getaddrinfo(ipv4_addr, NULL, NULL, &res);
+		ret = getaddrinfo(ipv4_addr, NULL, NULL, &ping_argv.src);
 		if (ret != 0) {
 			LOG_ERR("getaddrinfo(src) error: %d", ret);
 			freeaddrinfo(ping_argv.dest);
+			freeaddrinfo(ping_argv.src);
 			return -ret;
 		}
-		ping_argv.src = res;
-	} else if (res->ai_family == AF_INET6) {
+	} else if (ping_argv.dest->ai_family == AF_INET6) {
 		char ipv6_addr[NET_IPV6_ADDR_LEN] = {0};
 
 		LOG_INF("Ping target's IPv6 address");
 		util_get_ip_addr(NULL, ipv6_addr);
 		if (strlen(ipv6_addr) == 0) {
 			LOG_ERR("Unable to obtain local IPv6 address");
-			freeaddrinfo(res);
+			freeaddrinfo(ping_argv.dest);
 			return -1;
 		}
 
-		ping_argv.dest = res;
-		res = NULL;
-		ret = getaddrinfo(ipv6_addr, NULL, NULL, &res);
+		ret = getaddrinfo(ipv6_addr, NULL, NULL, &ping_argv.src);
 		if (ret != 0) {
 			LOG_ERR("getaddrinfo(src) error: %d", ret);
 			freeaddrinfo(ping_argv.dest);
+			freeaddrinfo(ping_argv.src);
 			return -ret;
 		}
-		ping_argv.src = res;
 	} else {
-		LOG_WRN("Address family not supported: %d", res->ai_family);
+		LOG_WRN("Address family not supported: %d", ping_argv.dest->ai_family);
 	}
 
 	k_work_submit_to_queue(&slm_work_q, &ping_work);

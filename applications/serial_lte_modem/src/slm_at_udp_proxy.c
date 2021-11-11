@@ -190,6 +190,9 @@ static int do_udp_server_stop(int error)
 static int do_udp_client_connect(const char *url, uint16_t port, int sec_tag)
 {
 	int ret;
+	struct sockaddr sa = {
+		.sa_family = AF_UNSPEC
+	};
 
 	/* Open socket */
 	if (sec_tag == INVALID_SEC_TAG) {
@@ -220,10 +223,6 @@ static int do_udp_client_connect(const char *url, uint16_t port, int sec_tag)
 	}
 
 	/* Connect to remote host */
-	struct sockaddr sa = {
-		.sa_family = AF_UNSPEC
-	};
-
 	ret = util_resolve_host(0, url, port, proxy.family, &sa);
 	if (ret) {
 		LOG_ERR("getaddrinfo() error: %s", log_strdup(gai_strerror(ret)));
@@ -255,8 +254,10 @@ static int do_udp_client_connect(const char *url, uint16_t port, int sec_tag)
 
 	return 0;
 exit:
-	close(proxy.sock);
-	proxy.sock = INVALID_SOCKET;
+	if (proxy.sock != INVALID_SOCKET) {
+		close(proxy.sock);
+		proxy.sock = INVALID_SOCKET;
+	}
 	sprintf(rsp_buf, "\r\n#XUDPCLI: %d,\"not connected\"\r\n", ret);
 	rsp_send(rsp_buf, strlen(rsp_buf));
 
@@ -570,10 +571,9 @@ int handle_at_udp_server(enum at_cmd_type cmd_type)
 #endif
 			if(op == SERVER_START || op == SERVER_START_WITH_DATAMODE) {
 				proxy.family = AF_INET;
-			} else if(op == SERVER_START6 || op == SERVER_START6_WITH_DATAMODE) {
-				proxy.family = AF_INET6;
 			} else {
-				proxy.family = AF_UNSPEC;
+				/* (op == SERVER_START6) || (op == SERVER_START6_WITH_DATAMODE) */
+				proxy.family = AF_INET6;
 			}
 			err = do_udp_server_start((uint16_t)port);
 			if (err == 0 && (op == SERVER_START_WITH_DATAMODE
@@ -658,10 +658,9 @@ int handle_at_udp_client(enum at_cmd_type cmd_type)
 #endif
 			if((op == CLIENT_CONNECT) || (op == CLIENT_CONNECT_WITH_DATAMODE)) {
 				proxy.family = AF_INET;
-			} else if((op == CLIENT_CONNECT6) || (op == CLIENT_CONNECT6_WITH_DATAMODE)) {
-				proxy.family = AF_INET6;
 			} else {
-				proxy.family = AF_UNSPEC;
+				/* (op == CLIENT_CONNECT6) || (op == CLIENT_CONNECT6_WITH_DATAMODE) */
+				proxy.family = AF_INET6;
 			}
 
 			err = do_udp_client_connect(url, (uint16_t)port, proxy.sec_tag);

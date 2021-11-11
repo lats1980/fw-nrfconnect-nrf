@@ -672,6 +672,7 @@ static void batlvl_read_fn(struct k_work *work)
 
 	if (stats.fd == INVALID_SOCKET) {
 		LOG_ERR("Not able to read vbat");
+		return;
 	}
 	/* Read xvbat */
 	bytes_sent = send(stats.fd, AT_CMD_VBAT,

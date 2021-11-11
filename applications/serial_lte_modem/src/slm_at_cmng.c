@@ -129,7 +129,7 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 	int err = -EINVAL;
 	uint16_t op, type;
 	nrf_sec_tag_t sec_tag;
-	uint8_t *content;
+	uint8_t *content = NULL;
 	size_t len = CONFIG_AT_CMD_RESPONSE_MAX_LEN;
 
 	switch (cmd_type) {
@@ -209,6 +209,10 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 				return -EINVAL;
 			}
 			content = k_malloc(CONFIG_AT_CMD_RESPONSE_MAX_LEN);
+			if (content == NULL) {
+				LOG_ERR("Fail to allocate memory");
+				return -ENOMEM;
+			}
 			err = util_string_get(&at_param_list, 4, content,
 						   &len);
 			if (err != 0) {
@@ -237,6 +241,10 @@ int handle_at_xcmng(enum at_cmd_type cmd_type)
 				return -EPERM;
 			}
 			content = k_malloc(CONFIG_AT_CMD_RESPONSE_MAX_LEN);
+			if (content == NULL) {
+				LOG_ERR("Fail to allocate memory");
+				return -ENOMEM;
+			}
 			err = slm_tls_storage_get(sec_tag, type, content,
 						CONFIG_AT_CMD_RESPONSE_MAX_LEN,
 						&len);

@@ -302,6 +302,9 @@ static int do_tcp_client_connect(const char *url,
 				 uint16_t port)
 {
 	int ret;
+	struct sockaddr sa = {
+		.sa_family = AF_UNSPEC
+	};
 
 	/* Open socket */
 	if (proxy.sec_tag == INVALID_SEC_TAG) {
@@ -356,11 +359,8 @@ static int do_tcp_client_connect(const char *url,
 			goto exit;
 		}
 	}
-	/* Connect to remote host */
-	struct sockaddr sa = {
-		.sa_family = AF_UNSPEC
-	};
 
+	/* Connect to remote host */
 	ret = util_resolve_host(0, url, port, proxy.family, &sa);
 	if (ret) {
 		LOG_ERR("getaddrinfo() error: %s", log_strdup(gai_strerror(ret)));
@@ -1177,11 +1177,9 @@ int handle_at_tcp_server(enum at_cmd_type cmd_type)
 			if(op == SERVER_START || op == SERVER_START_WITH_DATAMODE) {
 				proxy.family = AF_INET;
 			}
-			else if(op == SERVER_START6 || op == SERVER_START6_WITH_DATAMODE) {
-				proxy.family = AF_INET6;
-			}
 			else {
-				proxy.family = AF_UNSPEC;
+				/* (op == SERVER_START6 || op == SERVER_START6_WITH_DATAMODE) */
+				proxy.family = AF_INET6;
 			}
 
 			err = do_tcp_server_start((uint16_t)port);
@@ -1376,10 +1374,9 @@ int handle_at_tcp_client(enum at_cmd_type cmd_type)
 #endif
 			if(op == CLIENT_CONNECT || op == CLIENT_CONNECT_WITH_DATAMODE) {
 				proxy.family = AF_INET;
-			} else if (op == CLIENT_CONNECT6 || op == CLIENT_CONNECT6_WITH_DATAMODE) {
-				proxy.family = AF_INET6;
 			} else {
-				proxy.family = AF_UNSPEC;
+				/* (op == CLIENT_CONNECT6 || op == CLIENT_CONNECT6_WITH_DATAMODE) */
+				proxy.family = AF_INET6;
 			}
 
 			err = do_tcp_client_connect(url, hostname, (uint16_t)port);

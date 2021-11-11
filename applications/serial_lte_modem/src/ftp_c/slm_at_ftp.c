@@ -263,11 +263,11 @@ static int do_ftp_open(void)
 	}
 
 #if defined(CONFIG_SLM_CUSTOMIZED_RS232)
-		/* Activate DCD pin */
-		if (gpio_pin_set_raw(gpio_dev, CONFIG_SLM_DCD_PIN, 0) != 0) {
-			LOG_ERR("Cannot activate DCD pin");
-			return -EIO;
-		}
+	/* Activate DCD pin */
+	if (gpio_pin_set_raw(gpio_dev, CONFIG_SLM_DCD_PIN, 0) != 0) {
+		LOG_ERR("Cannot activate DCD pin");
+		return -EIO;
+	}
 #endif
 
 	return 0;

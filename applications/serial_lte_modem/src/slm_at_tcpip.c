@@ -696,6 +696,9 @@ static int do_recv(uint16_t length)
 		}
 		return -errno;
 	}
+	if (ret > sizeof(rx_data)) {
+		return -ENOMEM;
+	}
 	/**
 	 * When a stream socket peer has performed an orderly shutdown,
 	 * the return value will be 0 (the traditional "end-of-file")
@@ -835,23 +838,23 @@ static int do_sendto(const char *url, uint16_t port, const uint8_t *data,
 	LOG_DBG("UDP sent");
 	if (ret >= 0) {
 #if defined(CONFIG_SLM_UI)
-	if(client.family == AF_INET) {
-		if (ret < NET_IPV4_MTU/3) {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-		} else if (ret < 2*NET_IPV4_MTU/3) {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+		if(client.family == AF_INET) {
+			if (ret < NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (ret < 2*NET_IPV4_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
 		} else {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			if (ret < NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
+			} else if (ret < 2*NET_IPV6_MTU/3) {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
+			} else {
+				ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
+			}
 		}
-	} else {
-		if (ret < NET_IPV6_MTU/3) {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_SLOW);
-		} else if (ret < 2*NET_IPV6_MTU/3) {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_NORMAL);
-		} else {
-			ui_led_set_state(LED_ID_DATA, UI_DATA_FAST);
-		}
-	}	
 #endif
 		return 0;
 	} else {
@@ -876,6 +879,9 @@ static int do_recvfrom(uint16_t length)
 			rsp_send(rsp_buf, strlen(rsp_buf));
 		}
 		return -errno;
+	}
+	if (ret > sizeof(rx_data)) {
+		return -ENOMEM;
 	}
 #if defined(CONFIG_SLM_UI)
 	if(client.family == AF_INET) {
