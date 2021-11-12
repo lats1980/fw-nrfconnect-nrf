@@ -47,7 +47,7 @@ LOG_MODULE_REGISTER(at_host, CONFIG_SLM_LOG_LEVEL);
 
 #define UART_RX_BUF_NUM         2
 #define UART_RX_LEN             256
-#define UART_RX_TIMEOUT_MS      1
+#define UART_RX_TIMEOUT_MS      3
 #define UART_ERROR_DELAY_MS     500
 #define UART_RX_MARGIN_MS       10
 
