@@ -117,7 +117,7 @@ static int handle_at_slmver(enum at_cmd_type type)
 
 	if (type == AT_CMD_TYPE_SET_COMMAND) {
 #if defined(CONFIG_SLM_CUSTOMIZED)
-		sprintf(rsp_buf, "\r\n#XSLMVER: \"Customized v0.18\"\r\n");
+		sprintf(rsp_buf, "\r\n#XSLMVER: \"Customized v1.0\"\r\n");
 #else
 		sprintf(rsp_buf, "\r\n#XSLMVER: %s\r\n",
 			STRINGIFY(NCS_VERSION_STRING));
