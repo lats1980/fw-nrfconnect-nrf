@@ -42,6 +42,10 @@ config BRIDGE_LOG_POWER_DOWN_EVENT
 	bool "Power down event"
 	default y
 
+config BRIDGE_LOG_OT_EVENT
+	bool "Open Thread event"
+	default y
+
 endmenu
 
 endif

@@ -16,5 +16,8 @@ target_sources_ifdef(CONFIG_BRIDGE_CDC_ENABLE
 target_sources_ifdef(CONFIG_BRIDGE_BLE_ENABLE
 		     app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ble_handler.c)
 
+target_sources_ifdef(CONFIG_BRIDGE_OT_ENABLE
+		     app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ot_handler.c)
+
 target_sources_ifdef(CONFIG_BRIDGE_MSC_ENABLE
 		     app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/fs_handler.c)

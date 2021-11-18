@@ -63,6 +63,19 @@ config BRIDGE_BLE_ALWAYS_ON
 
 endif
 
+config BRIDGE_OT_ENABLE
+	bool "Enable Open Thread Service"
+	help
+	  This option enables Open Thread Service.
+
+if BRIDGE_OT_ENABLE
+
+module = BRIDGE_OT
+module-str = OT Service
+source "subsys/logging/Kconfig.template.log_config"
+
+endif
+
 if PM_DEVICE
 
 module = BRIDGE_POWER_MGMT
