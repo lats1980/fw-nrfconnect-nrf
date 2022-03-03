@@ -1,0 +1,13 @@
+/* Copyright (c) 2022 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+&i2c1 {
+	status = "disabled";
+};
+
+&uart1 {
+	status = "okay";
+	tx-pin = <34>;
+	rx-pin = <35>;
+};

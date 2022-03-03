@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2022 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+source "Kconfig.zephyr"
+
+menu "Matter Bridge"
+
+config ZIGBEE_SHELL_DEVICE_NAME
+	string "UART device name for Zigbee shell"
+	default "UART_1"
+
+endmenu
