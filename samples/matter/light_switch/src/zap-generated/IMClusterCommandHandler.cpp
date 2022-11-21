@@ -38,12 +38,15 @@ namespace chip
 {
 namespace app
 {
+
 	// Cluster specific command parsing
 
 	namespace Clusters
 	{
+
 		namespace AdministratorCommissioning
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -108,6 +111,7 @@ namespace app
 
 		namespace GeneralCommissioning
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -172,6 +176,7 @@ namespace app
 
 		namespace GeneralDiagnostics
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -216,6 +221,7 @@ namespace app
 
 		namespace GroupKeyManagement
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -289,6 +295,7 @@ namespace app
 
 		namespace Groups
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -377,6 +384,7 @@ namespace app
 
 		namespace Identify
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -389,6 +397,15 @@ namespace app
 						TLVError = DataModel::Decode(aDataTlv, commandData);
 						if (TLVError == CHIP_NO_ERROR) {
 							wasHandled = emberAfIdentifyClusterIdentifyCallback(
+								apCommandObj, aCommandPath, commandData);
+						}
+						break;
+					}
+					case Commands::TriggerEffect::Id: {
+						Commands::TriggerEffect::DecodableType commandData;
+						TLVError = DataModel::Decode(aDataTlv, commandData);
+						if (TLVError == CHIP_NO_ERROR) {
+							wasHandled = emberAfIdentifyClusterTriggerEffectCallback(
 								apCommandObj, aCommandPath, commandData);
 						}
 						break;
@@ -420,6 +437,7 @@ namespace app
 
 		namespace NetworkCommissioning
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -514,6 +532,7 @@ namespace app
 
 		namespace OtaSoftwareUpdateRequestor
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -558,6 +577,7 @@ namespace app
 
 		namespace OperationalCredentials
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -671,6 +691,7 @@ namespace app
 
 		namespace ThreadNetworkDiagnostics
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
@@ -715,6 +736,7 @@ namespace app
 
 		namespace WiFiNetworkDiagnostics
 		{
+
 			void DispatchServerCommand(CommandHandler *apCommandObj,
 						   const ConcreteCommandPath &aCommandPath, TLV::TLVReader &aDataTlv)
 			{
