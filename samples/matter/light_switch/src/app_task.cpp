@@ -53,15 +53,18 @@ namespace
 constexpr uint32_t kFactoryResetTriggerTimeout = 3000;
 constexpr uint32_t kFactoryResetCancelWindowTimeout = 3000;
 constexpr uint32_t kDimmerTriggeredTimeout = 500;
+constexpr uint32_t kGenericSwitchShortPressTimeout = 1000;
 constexpr uint32_t kDimmerInterval = 300;
 constexpr size_t kAppEventQueueSize = 10;
 constexpr EndpointId kLightSwitchEndpointId = 1;
+constexpr EndpointId kLightGenericSwitchEndpointId = 2;
 constexpr EndpointId kLightEndpointId = 1;
 
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
 k_timer sDimmerPressKeyTimer;
 k_timer sDimmerTimer;
+k_timer sGenericSwitchTimer;
 
 Identify sIdentify = { kLightEndpointId, AppTask::IdentifyStartHandler, AppTask::IdentifyStopHandler,
 		       EMBER_ZCL_IDENTIFY_IDENTIFY_TYPE_VISIBLE_LED };
@@ -76,6 +79,7 @@ bool sIsNetworkProvisioned = false;
 bool sIsNetworkEnabled = false;
 bool sHaveBLEConnections = false;
 bool sWasDimmerTriggered = false;
+bool sWasGenericSwitchTriggered = false;
 } /* namespace */
 
 namespace LedConsts
@@ -151,7 +155,7 @@ CHIP_ERROR AppTask::Init()
 	return CHIP_ERROR_INTERNAL;
 #endif /* CONFIG_NET_L2_OPENTHREAD */
 
-	LightSwitch::GetInstance().Init(kLightSwitchEndpointId);
+	LightSwitch::GetInstance().Init(kLightSwitchEndpointId, kLightGenericSwitchEndpointId);
 
 	/* Initialize LEDs */
 	LEDWidget::InitGpio();
@@ -173,9 +177,11 @@ CHIP_ERROR AppTask::Init()
 	k_timer_init(&sFunctionTimer, AppTask::FunctionTimerTimeoutCallback, nullptr);
 	k_timer_init(&sDimmerPressKeyTimer, AppTask::FunctionTimerTimeoutCallback, nullptr);
 	k_timer_init(&sDimmerTimer, AppTask::FunctionTimerTimeoutCallback, nullptr);
+	k_timer_init(&sGenericSwitchTimer, AppTask::FunctionTimerTimeoutCallback, nullptr);
 	k_timer_user_data_set(&sDimmerTimer, this);
 	k_timer_user_data_set(&sDimmerPressKeyTimer, this);
 	k_timer_user_data_set(&sFunctionTimer, this);
+	k_timer_user_data_set(&sGenericSwitchTimer, this);
 
 #ifdef CONFIG_MCUMGR_SMP_BT
 	/* Initialize DFU over SMP */
@@ -246,10 +252,14 @@ void AppTask::ButtonPushHandler(const AppEvent &event)
 				break;
 			}
 #else
-			SWITCH_BUTTON:
+			DIMMER_SWITCH_BUTTON:
 #endif
 			LOG_INF("Button has been pressed, keep in this state for at least 500 ms to change light sensitivity of binded lighting devices.");
 			Instance().StartTimer(Timer::DimmerTrigger, kDimmerTriggeredTimeout);
+			break;
+		case GENERIC_SWITCH_BUTTON:
+			LOG_INF("Button has been pressed, keep in this state for at least 1000 ms to be a long press.");
+			Instance().StartTimer(Timer::GenericSwitchTrigger, kGenericSwitchShortPressTimeout);
 			break;
 		default:
 			break;
@@ -281,7 +291,7 @@ void AppTask::ButtonReleaseHandler(const AppEvent &event)
 			}
 			break;
 #if NUMBER_OF_BUTTONS == 4
-		case SWITCH_BUTTON:
+		case DIMMER_SWITCH_BUTTON:
 #else
 		case BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON:
 			if (!ConnectivityMgr().IsBLEAdvertisingEnabled() &&
@@ -301,6 +311,17 @@ void AppTask::ButtonReleaseHandler(const AppEvent &event)
 			Instance().CancelTimer(Timer::Dimmer);
 			Instance().CancelTimer(Timer::DimmerTrigger);
 			sWasDimmerTriggered = false;
+			break;
+		case GENERIC_SWITCH_BUTTON:
+			if (!sWasGenericSwitchTriggered) {
+				LOG_INF("Generic switch: short press");
+				LightSwitch::GetInstance().GenericSwitchShortPress();
+			} else {
+				LOG_INF("Generic switch: long press");
+				LightSwitch::GetInstance().GenericSwitchLongPress();
+			}
+			Instance().CancelTimer(Timer::GenericSwitchTrigger);
+			sWasGenericSwitchTriggered = false;
 			break;
 		default:
 			break;
@@ -348,6 +369,11 @@ void AppTask::TimerEventHandler(const AppEvent &event)
 			break;
 		case Timer::Dimmer:
 			LightSwitch::GetInstance().DimmerChangeBrightness();
+			break;
+		case Timer::GenericSwitchTrigger:
+			LOG_INF("Switch triggered...");
+			sWasGenericSwitchTriggered = true;
+			Instance().CancelTimer(Timer::GenericSwitchTrigger);
 			break;
 		default:
 			break;
@@ -481,8 +507,8 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 	uint32_t buttonMask = BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON_MASK;
 	buttonEvent.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON;
 #else
-	uint32_t buttonMask = SWITCH_BUTTON_MASK;
-	buttonEvent.ButtonEvent.PinNo = SWITCH_BUTTON;
+	uint32_t buttonMask = DIMMER_SWITCH_BUTTON_MASK;
+	buttonEvent.ButtonEvent.PinNo = DIMMER_SWITCH_BUTTON;
 #endif
 
 	if (buttonMask & buttonState & hasChanged) {
@@ -490,6 +516,18 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 		buttonEvent.Handler = ButtonPushHandler;
 		PostEvent(buttonEvent);
 	} else if (buttonMask & hasChanged) {
+		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+		buttonEvent.Handler = ButtonReleaseHandler;
+		PostEvent(buttonEvent);
+	}
+
+	if (GENERIC_SWITCH_BUTTON_MASK & buttonState & hasChanged) {
+		buttonEvent.ButtonEvent.PinNo = GENERIC_SWITCH_BUTTON;
+		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
+		buttonEvent.Handler = ButtonPushHandler;
+		PostEvent(buttonEvent);
+	} else if (GENERIC_SWITCH_BUTTON_MASK & hasChanged) {
+		buttonEvent.ButtonEvent.PinNo = GENERIC_SWITCH_BUTTON;
 		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
 		buttonEvent.Handler = ButtonReleaseHandler;
 		PostEvent(buttonEvent);
@@ -517,6 +555,9 @@ void AppTask::StartTimer(Timer timer, uint32_t timeoutMs)
 	case Timer::Dimmer:
 		k_timer_start(&sDimmerTimer, K_MSEC(timeoutMs), K_MSEC(timeoutMs));
 		break;
+	case Timer::GenericSwitchTrigger:
+		k_timer_start(&sGenericSwitchTimer, K_MSEC(timeoutMs), K_NO_WAIT);
+		break;
 	default:
 		break;
 	}
@@ -533,6 +574,9 @@ void AppTask::CancelTimer(Timer timer)
 		break;
 	case Timer::Dimmer:
 		k_timer_stop(&sDimmerTimer);
+		break;
+	case Timer::GenericSwitchTrigger:
+		k_timer_stop(&sGenericSwitchTimer);
 		break;
 	default:
 		break;
@@ -579,6 +623,13 @@ void AppTask::FunctionTimerTimeoutCallback(k_timer *timer)
 	if (timer == &sDimmerTimer) {
 		event.Type = AppEventType::Timer;
 		event.TimerEvent.TimerType = (uint8_t)Timer::Dimmer;
+		event.TimerEvent.Context = k_timer_user_data_get(timer);
+		event.Handler = TimerEventHandler;
+		PostEvent(event);
+	}
+	if (timer == &sGenericSwitchTimer) {
+		event.Type = AppEventType::Timer;
+		event.TimerEvent.TimerType = (uint8_t)Timer::GenericSwitchTrigger;
 		event.TimerEvent.Context = k_timer_user_data_get(timer);
 		event.Handler = TimerEventHandler;
 		PostEvent(event);

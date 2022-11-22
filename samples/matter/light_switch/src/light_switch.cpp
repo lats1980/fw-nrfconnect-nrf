@@ -12,13 +12,17 @@
 #include <app/util/binding-table.h>
 #include <controller/InvokeInteraction.h>
 
+#include <app/clusters/switch-server/switch-server.h>
+#include <app-common/zap-generated/attributes/Accessors.h>
+
 using namespace chip;
 using namespace chip::app;
 
-void LightSwitch::Init(chip::EndpointId aLightSwitchEndpoint)
+void LightSwitch::Init(chip::EndpointId aLightSwitchEndpoint, chip::EndpointId aGenericSwitchEndpoint)
 {
 	BindingHandler::GetInstance().Init();
 	mLightSwitchEndpoint = aLightSwitchEndpoint;
+	mGenericSwitchEndpoint = aGenericSwitchEndpoint;
 }
 
 void LightSwitch::InitiateActionSwitch(Action mAction)
@@ -65,4 +69,25 @@ void LightSwitch::DimmerChangeBrightness()
 		DeviceLayer::PlatformMgr().ScheduleWork(BindingHandler::SwitchWorkerHandler,
 							reinterpret_cast<intptr_t>(data));
 	}
+}
+
+void LightSwitch::GenericSwitchShortPress()
+{
+	DeviceLayer::SystemLayer().ScheduleLambda([this] {
+		Clusters::Switch::Attributes::CurrentPosition::Set(mGenericSwitchEndpoint, 1);
+		Clusters::SwitchServer::Instance().OnInitialPress(mGenericSwitchEndpoint, 1);
+		Clusters::Switch::Attributes::CurrentPosition::Set(mGenericSwitchEndpoint, 0);
+		Clusters::SwitchServer::Instance().OnShortRelease(mGenericSwitchEndpoint, 0);
+	});
+}
+
+
+void LightSwitch::GenericSwitchLongPress()
+{
+	DeviceLayer::SystemLayer().ScheduleLambda([this] {
+		Clusters::Switch::Attributes::CurrentPosition::Set(mGenericSwitchEndpoint, 1);
+		Clusters::SwitchServer::Instance().OnLongPress(mGenericSwitchEndpoint, 1);
+		Clusters::Switch::Attributes::CurrentPosition::Set(mGenericSwitchEndpoint, 0);
+		Clusters::SwitchServer::Instance().OnLongRelease(mGenericSwitchEndpoint, 0);
+	});
 }

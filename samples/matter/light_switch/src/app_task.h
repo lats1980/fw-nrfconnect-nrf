@@ -38,10 +38,11 @@ public:
 	static void IdentifyStopHandler(Identify *);
 
 private:
-	enum class Timer : uint8_t { Function, DimmerTrigger, Dimmer };
+	enum class Timer : uint8_t { Function, DimmerTrigger, Dimmer, GenericSwitchTrigger };
 	enum class Button : uint8_t {
 		Function,
 		Dimmer,
+		GenericSW,
 	};
 
 	CHIP_ERROR Init();
