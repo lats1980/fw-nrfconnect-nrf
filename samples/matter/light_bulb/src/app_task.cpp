@@ -49,6 +49,7 @@ constexpr size_t kAppEventQueueSize = 10;
 constexpr EndpointId kLightEndpointId = 1;
 constexpr uint8_t kDefaultMinLevel = 0;
 constexpr uint8_t kDefaultMaxLevel = 254;
+constexpr uint16_t kFactoryUserDataLength = 1024;
 
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
@@ -172,6 +173,14 @@ CHIP_ERROR AppTask::Init()
 	SetDeviceInstanceInfoProvider(&mFactoryDataProvider);
 	SetDeviceAttestationCredentialsProvider(&mFactoryDataProvider);
 	SetCommissionableDataProvider(&mFactoryDataProvider);
+
+	char userDataString[kFactoryUserDataLength + 1] = { 0 };
+	err = mFactoryDataProvider.GetUserData(userDataString, sizeof(userDataString));
+	if (err != CHIP_NO_ERROR) {
+		LOG_ERR("FactoryDataProvider().GetUserData() failed");
+		return err;
+	}
+	LOG_HEXDUMP_INF(userDataString, kFactoryUserDataLength, "");
 #else
 	SetDeviceAttestationCredentialsProvider(Examples::GetExampleDACProvider());
 #endif
