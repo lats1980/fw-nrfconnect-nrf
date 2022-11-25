@@ -27,3 +27,7 @@ endif # MPSL_FEM
 source "${ZEPHYR_BASE}/../modules/lib/matter/config/nrfconnect/chip-module/Kconfig.features"
 source "${ZEPHYR_BASE}/../modules/lib/matter/config/nrfconnect/chip-module/Kconfig.defaults"
 source "Kconfig.zephyr"
+
+module = MATTER_LIGHTBULB
+module-str = matter light bulb
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
