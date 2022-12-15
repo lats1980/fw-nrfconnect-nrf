@@ -29,14 +29,8 @@
 #define EMBER_APS_UNICAST_MESSAGE_COUNT 10
 
 /**** Cluster endpoint counts ****/
-#define EMBER_AF_IDENTIFY_CLUSTER_CLIENT_ENDPOINT_COUNT (1)
 #define EMBER_AF_IDENTIFY_CLUSTER_SERVER_ENDPOINT_COUNT (1)
-#define EMBER_AF_GROUPS_CLUSTER_SERVER_ENDPOINT_COUNT (1)
-#define EMBER_AF_SCENES_CLUSTER_CLIENT_ENDPOINT_COUNT (1)
-#define EMBER_AF_ON_OFF_CLUSTER_CLIENT_ENDPOINT_COUNT (1)
-#define EMBER_AF_LEVEL_CONTROL_CLUSTER_CLIENT_ENDPOINT_COUNT (1)
 #define EMBER_AF_DESCRIPTOR_CLUSTER_SERVER_ENDPOINT_COUNT (2)
-#define EMBER_AF_BINDING_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_ACCESS_CONTROL_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_BASIC_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_OTA_PROVIDER_CLUSTER_CLIENT_ENDPOINT_COUNT (1)
@@ -47,52 +41,22 @@
 #define EMBER_AF_SOFTWARE_DIAGNOSTICS_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_THREAD_NETWORK_DIAGNOSTICS_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_WIFI_NETWORK_DIAGNOSTICS_CLUSTER_SERVER_ENDPOINT_COUNT (1)
+#define EMBER_AF_SWITCH_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_ADMINISTRATOR_COMMISSIONING_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_OPERATIONAL_CREDENTIALS_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_GROUP_KEY_MANAGEMENT_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 
 /**** Cluster Plugins ****/
 
-// Use this macro to check if the client side of the Identify cluster is included
-#define ZCL_USING_IDENTIFY_CLUSTER_CLIENT
-#define EMBER_AF_PLUGIN_IDENTIFY_CLIENT
-
 // Use this macro to check if the server side of the Identify cluster is included
 #define ZCL_USING_IDENTIFY_CLUSTER_SERVER
 #define EMBER_AF_PLUGIN_IDENTIFY_SERVER
 #define EMBER_AF_PLUGIN_IDENTIFY
 
-// Use this macro to check if the server side of the Groups cluster is included
-#define ZCL_USING_GROUPS_CLUSTER_SERVER
-#define EMBER_AF_PLUGIN_GROUPS_SERVER
-#define EMBER_AF_PLUGIN_GROUPS
-
-// Use this macro to check if the client side of the Scenes cluster is included
-#define ZCL_USING_SCENES_CLUSTER_CLIENT
-#define EMBER_AF_PLUGIN_SCENES_CLIENT
-
-// Scenes FeatureMap Attribute Toggle Scenes Name feature
-// App cluster specs 1.4.4
-#define MATTER_CLUSTER_SCENE_NAME_SUPPORT_MASK 0x0001
-#define MATTER_CLUSTER_SCENE_NAME_SUPPORT (0x0000 & MATTER_CLUSTER_SCENE_NAME_SUPPORT_MASK)
-
-// Use this macro to check if the client side of the On/Off cluster is included
-#define ZCL_USING_ON_OFF_CLUSTER_CLIENT
-#define EMBER_AF_PLUGIN_ON_OFF_CLIENT
-
-// Use this macro to check if the client side of the Level Control cluster is included
-#define ZCL_USING_LEVEL_CONTROL_CLUSTER_CLIENT
-#define EMBER_AF_PLUGIN_LEVEL_CONTROL_CLIENT
-
 // Use this macro to check if the server side of the Descriptor cluster is included
 #define ZCL_USING_DESCRIPTOR_CLUSTER_SERVER
 #define EMBER_AF_PLUGIN_DESCRIPTOR_SERVER
 #define EMBER_AF_PLUGIN_DESCRIPTOR
-
-// Use this macro to check if the server side of the Binding cluster is included
-#define ZCL_USING_BINDING_CLUSTER_SERVER
-#define EMBER_AF_PLUGIN_BINDING_SERVER
-#define EMBER_AF_PLUGIN_BINDING
 
 // Use this macro to check if the server side of the Access Control cluster is included
 #define ZCL_USING_ACCESS_CONTROL_CLUSTER_SERVER
@@ -142,6 +106,11 @@
 #define ZCL_USING_WIFI_NETWORK_DIAGNOSTICS_CLUSTER_SERVER
 #define EMBER_AF_PLUGIN_WI_FI_NETWORK_DIAGNOSTICS_SERVER
 #define EMBER_AF_PLUGIN_WI_FI_NETWORK_DIAGNOSTICS
+
+// Use this macro to check if the server side of the Switch cluster is included
+#define ZCL_USING_SWITCH_CLUSTER_SERVER
+#define EMBER_AF_PLUGIN_SWITCH_SERVER
+#define EMBER_AF_PLUGIN_SWITCH
 
 // Use this macro to check if the server side of the AdministratorCommissioning cluster is included
 #define ZCL_USING_ADMINISTRATOR_COMMISSIONING_CLUSTER_SERVER
