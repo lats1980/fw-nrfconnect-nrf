@@ -19,16 +19,9 @@
  */
 class LightSwitch {
 public:
-	enum class Action : uint8_t {
-		Toggle, /* Switch state on lighting-app device */
-		On, /* Turn on light on lighting-app device */
-		Off /* Turn off light on lighting-app device */
-	};
-
-	void Init(chip::EndpointId aLightSwitchEndpoint);
-	void InitiateActionSwitch(Action);
-	void DimmerChangeBrightness();
-	chip::EndpointId GetLightSwitchEndpointId() { return mLightSwitchEndpoint; }
+	void Init(chip::EndpointId aGenericSwitchEndpoint);
+	void GenericSwitchShortPress();
+	void GenericSwitchLongPress();
 
 	static LightSwitch &GetInstance()
 	{
@@ -37,8 +30,5 @@ public:
 	}
 
 private:
-	constexpr static auto kOnePercentBrightnessApproximation = 3;
-	constexpr static auto kMaximumBrightness = 254;
-
-	chip::EndpointId mLightSwitchEndpoint;
+	chip::EndpointId mGenericSwitchEndpoint;
 };
