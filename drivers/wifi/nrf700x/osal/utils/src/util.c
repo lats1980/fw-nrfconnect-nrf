@@ -9,7 +9,11 @@
  * Wi-Fi driver.
  */
 
+#ifdef __linux__
+#include <linux/string.h>
+#else
 #include <string.h>
+#endif
 #include <util.h>
 #include "host_rpu_data_if.h"
 
