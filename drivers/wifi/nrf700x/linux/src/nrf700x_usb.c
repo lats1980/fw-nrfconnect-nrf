@@ -34,7 +34,7 @@ static int nrf700x_probe(struct usb_interface *interface,
 	linux_qspi_priv = (struct linux_shim_bus_qspi_priv *)qspi_priv->os_qspi_priv;
 	linux_qspi_priv->usbdev = udev;
 
-    status = wifi_nrf_fmac_dev_add_linux();
+    status = wifi_nrf_fmac_dev_add_linux(&interface->dev);
 	if (status != WIFI_NRF_STATUS_SUCCESS) {
 		printk("%s: wifi_nrf_fmac_dev_add_linux failed\n", __func__);
 		goto err;
@@ -47,6 +47,11 @@ err:
 static void nrf700x_disconnect(struct usb_interface *interface)
 {
     printk(KERN_ERR "nRF7002 driver discon\n");
+	struct nrf700x_adapter *vif_ctx;
+	//currently only 1 vif
+	vif_ctx = rpu_drv_priv_linux.rpu_ctx_linux.vif_ctx_linux[0];
+    cancel_work_sync(&vif_ctx->ws_scan);
+	nrf700x_uninit(vif_ctx);
     wifi_nrf_fmac_dev_rem_linux(&rpu_drv_priv_linux);
 }
 

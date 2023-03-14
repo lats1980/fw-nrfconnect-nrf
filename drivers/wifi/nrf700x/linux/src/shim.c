@@ -52,20 +52,27 @@ static unsigned int linux_shim_usb_read_reg32(void *priv, unsigned long addr)
 	}
 	req->cmd = REGISTER_READ;
 	req->read_reg.addr = (uint32_t)addr;
+	retry_cnt = 0;
+retry_tx:
+	retry_cnt++;
 	ret = usb_control_msg(qspi_priv->usbdev,
 			      usb_sndctrlpipe(qspi_priv->usbdev, 0),
 			      REGISTER_READ,
 			      USB_TYPE_VENDOR | USB_DIR_OUT | USB_RECIP_DEVICE, 0, 0, req,
 			      sizeof(*req), 1000);
 	if (ret < 0) {
-		printk("%s: Unable to send usb control msg: %u\n", __func__, REGISTER_READ);
-		kfree(req);
-		return 0xFFFFFFFF;
+		if (retry_cnt > 100) {
+			printk("%s: Unable to send usb control msg: %u %d received\n", __func__, REGISTER_READ, ret);
+			kfree(req);
+			return 0xFFFFFFFF;
+		}
+		msleep(10);
+		goto retry_tx;
 	}
 	kfree(req);
 	buf = kcalloc(sizeof(val), sizeof(char), GFP_KERNEL);
 	retry_cnt = 0;
-retry:
+retry_rx:
 	retry_cnt++;
 	ret = usb_control_msg(qspi_priv->usbdev,
 			      usb_rcvctrlpipe(qspi_priv->usbdev, 0),
@@ -73,13 +80,13 @@ retry:
 			      USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_DEVICE, 0, 0, buf,
 			      sizeof(val), 1000);
 	if (ret != sizeof(val)) {
-		if (retry_cnt > 100) {
+		if (retry_cnt > 10000) {
 			printk("%s: Unable to receive usb control msg: %u %d received\n", __func__, REGISTER_READ, ret);
 			kfree(buf);
 			return 0xFFFFFFFF;
 		}
-		msleep(10);
-		goto retry;
+		usleep_range(100, 200);
+		goto retry_rx;
 	}
 	val = *(uint32_t *)buf;
 	//printk("rr: %lu %u", addr, val);
@@ -282,19 +289,6 @@ static int linux_shim_pr_err(const char *fmt, va_list args)
 	return 0;
 }
 
-struct nwb {
-	unsigned char *data;
-	unsigned char *tail;
-	int len;
-	int headroom;
-	void *next;
-	void *priv;
-	int iftype;
-	void *ifaddr;
-	void *dev;
-	int hostbuffer;
-};
-
 static void *linux_shim_nbuf_alloc(unsigned int size)
 {
 	struct nwb *nwb;
@@ -386,6 +380,30 @@ static void *linux_shim_nbuf_data_pull(void *nbuf, unsigned int size)
 	nwb->len -= size;
 
 	return nwb->data;
+}
+
+void *net_pkt_to_nbuf(struct sk_buff *skb)
+{
+	struct nwb *nwb;
+
+	unsigned char *data;
+	unsigned int len;
+
+	len = skb->len;
+
+	nwb = linux_shim_nbuf_alloc(len + 100);
+
+	if (!nwb) {
+		printk("%s: Fail to allocate nwb\n", __func__);
+		return NULL;
+	}
+
+	linux_shim_nbuf_headroom_res(nwb, 100);
+
+	data = linux_shim_nbuf_data_put(nwb, len);
+	memcpy(data, skb->data, len);
+
+	return nwb;
 }
 
 static void *linux_shim_llist_node_alloc(void)

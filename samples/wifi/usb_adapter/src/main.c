@@ -67,7 +67,7 @@ static struct gpio_callback gpio_cb_data;
 
 static void wifi_int_cb(uint8_t ep, int size, void *priv)
 {
-	LOG_INF("write ep %x size %d", ep, size);
+	LOG_DBG("write ep %x size %d", ep, size);
 }
 
 static void wifi_write_cb(uint8_t ep, int size, void *priv)
@@ -78,7 +78,7 @@ static void wifi_write_cb(uint8_t ep, int size, void *priv)
 	}
 	tx_offset += size;
 	if (tx_offset >= tx_count) {
-		LOG_INF("Write finished");
+		LOG_DBG("Write finished");
 		return;
 	}
 	//len = ((tx_count - tx_offset) > CONFIG_WIFI_BULK_EP_MPS)?CONFIG_WIFI_BULK_EP_MPS:(tx_count - tx_offset);
@@ -393,6 +393,11 @@ static void tx_thread(void)
 					} else {
 						qspi_read(req->read_reg.addr, &reg_val, 4);
 					}
+				} else {
+					LOG_INF("register not retrive yet");
+					k_fifo_put(&tx_queue, req_item);
+					k_sleep(K_MSEC(2));
+					continue;
 				}
 				LOG_DBG("Read register from: %u Got value: %u", req->read_reg.addr, reg_val);
 				atomic_set(&reg_ready, true);
@@ -451,7 +456,7 @@ void main(void)
 {
 	int ret;
 
-	atomic_set(&reg_ready, true);
+	atomic_set(&reg_ready, false);
 #ifdef CLOCK_FEATURE_HFCLK_DIVIDE_PRESENT
 	/* For now hardcode to 128MHz */
 	nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK,

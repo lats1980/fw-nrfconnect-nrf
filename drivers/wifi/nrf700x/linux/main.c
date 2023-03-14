@@ -1,6 +1,6 @@
 
 #include <linux/module.h>
-
+#include "fmac_event.h"
 #include <rpu_fw_patches.h>
 #include <fmac_api.h>
 #include <linux_fmac_main.h>
@@ -19,33 +19,31 @@ struct wifi_nrf_drv_priv_linux rpu_drv_priv_linux;
 
 #define MAX_RX_QUEUES 3
 
-#define TOTAL_TX_SIZE (CONFIG_TX_MAX_DATA_SIZE + TX_BUF_HEADROOM)
-
-BUILD_ASSERT(CONFIG_MAX_TX_TOKENS >= 1, "At least one TX token is required");
-BUILD_ASSERT(CONFIG_MAX_TX_AGGREGATION <= 16, "Max TX aggregation is 16");
-BUILD_ASSERT(CONFIG_RX_NUM_BUFS >= 1, "At least one RX buffer is required");
-
-BUILD_ASSERT(RPU_PKTRAM_SIZE >=
-		((CONFIG_MAX_TX_AGGREGATION * CONFIG_MAX_TX_TOKENS * TOTAL_TX_SIZE) +
-		(CONFIG_RX_NUM_BUFS * CONFIG_RX_MAX_DATA_SIZE)),
-		"Packet RAM overflow in Sheliak");
+#define TOTAL_TX_FRAMES \
+	(CONFIG_NRF700X_MAX_TX_TOKENS * CONFIG_NRF700X_MAX_TX_AGGREGATION)
+#define MAX_TX_FRAME_SIZE \
+	(CONFIG_NRF700X_TX_MAX_DATA_SIZE + TX_BUF_HEADROOM)
+#define TOTAL_TX_SIZE \
+	(TOTAL_TX_FRAMES * MAX_TX_FRAME_SIZE)
+#define TOTAL_RX_SIZE \
+	(CONFIG_NRF700X_RX_NUM_BUFS * CONFIG_NRF700X_RX_MAX_DATA_SIZE)
 
 static const unsigned char aggregation = 1;
 static const unsigned char wmm = 1;
 static const unsigned char max_num_tx_agg_sessions = 4;
-static const unsigned char max_num_rx_agg_sessions = 2;
+static const unsigned char max_num_rx_agg_sessions = 8;
 static const unsigned char reorder_buf_size = 64;
 static const unsigned char max_rxampdu_size = MAX_RX_AMPDU_SIZE_64KB;
 
-static const unsigned char max_tx_aggregation = CONFIG_MAX_TX_AGGREGATION;
+static const unsigned char max_tx_aggregation = CONFIG_NRF700X_MAX_TX_AGGREGATION;
 
-static const unsigned int rx1_num_bufs = CONFIG_RX_NUM_BUFS / MAX_RX_QUEUES;
-static const unsigned int rx2_num_bufs = CONFIG_RX_NUM_BUFS / MAX_RX_QUEUES;
-static const unsigned int rx3_num_bufs = CONFIG_RX_NUM_BUFS / MAX_RX_QUEUES;
+static const unsigned int rx1_num_bufs = CONFIG_NRF700X_RX_NUM_BUFS / MAX_RX_QUEUES;
+static const unsigned int rx2_num_bufs = CONFIG_NRF700X_RX_NUM_BUFS / MAX_RX_QUEUES;
+static const unsigned int rx3_num_bufs = CONFIG_NRF700X_RX_NUM_BUFS / MAX_RX_QUEUES;
 
-static const unsigned int rx1_buf_sz = CONFIG_RX_MAX_DATA_SIZE;
-static const unsigned int rx2_buf_sz = CONFIG_RX_MAX_DATA_SIZE;
-static const unsigned int rx3_buf_sz = CONFIG_RX_MAX_DATA_SIZE;
+static const unsigned int rx1_buf_sz = CONFIG_NRF700X_RX_MAX_DATA_SIZE;
+static const unsigned int rx2_buf_sz = CONFIG_NRF700X_RX_MAX_DATA_SIZE;
+static const unsigned int rx3_buf_sz = CONFIG_NRF700X_RX_MAX_DATA_SIZE;
 
 static const unsigned char rate_protection_type;
 #else
@@ -64,31 +62,36 @@ struct wifi_nrf_drv_priv_linux rpu_drv_priv_linux;
 /* TODO add missing code */
 #endif /* !CONFIG_NRF700X_RADIO_TEST */
 
-static void nrf700x_scan_routine(struct work_struct *w) {
-	enum wifi_nrf_status status = WIFI_NRF_STATUS_FAIL;
-	struct nrf_wifi_umac_scan_info scan_info;
+void fmac_event_handler_routine(struct work_struct *w)
+{
+	struct fmac_event *event;
 
-    struct nrf700x_adapter *nrf700x = container_of(w, struct nrf700x_adapter, ws_scan);
-
-    if(down_interruptible(&nrf700x->sem)) {
-        return;
-    }
-
-	printk("scan routine\n");
-	memset(&scan_info, 0, sizeof(scan_info));
-	scan_info.scan_mode = AUTO_SCAN;
-	scan_info.scan_reason = SCAN_DISPLAY;
-	/* Wildcard SSID to trigger active scan */
-	scan_info.scan_params.num_scan_ssids = 1;
-	scan_info.scan_params.scan_ssids[0].nrf_wifi_ssid_len = 0;
-	scan_info.scan_params.scan_ssids[0].nrf_wifi_ssid[0] = 0;
-	status = wifi_nrf_fmac_scan(rpu_drv_priv_linux.rpu_ctx_linux.rpu_ctx, nrf700x->vif_idx, &scan_info);
-	if (status != WIFI_NRF_STATUS_SUCCESS) {
-		printk("%s: wifi_nrf_fmac_scan failed\n", __func__);
+	/* Get event from queue */
+	while (!list_empty(&rpu_drv_priv_linux.fmac_event_q)) {
+		event = list_first_entry(&rpu_drv_priv_linux.fmac_event_q,
+					 struct fmac_event, q);
+		//printk("get event from q. len: %u\n", event->datalen);
+		if (event->data && event->datalen) {
+			if (event->type == FMAC_EVENT_DATA) {
+				wifi_nrf_if_rx_frm(event->vif_ctx, event->data);
+			} else if (event->type == FMAC_EVENT_CARR_STATE) {
+				enum wifi_nrf_fmac_if_carr_state carr_state;
+				carr_state = *(enum wifi_nrf_fmac_if_carr_state *)event->data;
+				wifi_nrf_if_carr_state_chg(event->vif_ctx, carr_state);
+			} else {
+				cfg80211_process_fmac_event(event);
+			}
+			list_del(&event->q);
+			kfree(event->data);
+			kfree(event);
+		} else {
+			list_del(&event->q);
+			kfree(event);
+		}
 	}
 }
 
-enum wifi_nrf_status wifi_nrf_fmac_dev_add_linux(void)
+enum wifi_nrf_status wifi_nrf_fmac_dev_add_linux(struct device *dev)
 {
 	enum wifi_nrf_status status = WIFI_NRF_STATUS_FAIL;
 	struct wifi_nrf_ctx_linux *rpu_ctx_linux = NULL;
@@ -97,9 +100,10 @@ enum wifi_nrf_status wifi_nrf_fmac_dev_add_linux(void)
 	
 	struct nrf_wifi_umac_add_vif_info add_vif_info;
 	struct nrf_wifi_umac_chg_vif_state_info chg_vif_info;
-	unsigned char vif_idx;
-	uint8_t addr[6];//for test
+	//unsigned char vif_idx;
 	struct nrf700x_adapter *vif_ctx;
+	int i;
+
 #ifdef CONFIG_NRF_WIFI_LOW_POWER
 	int sleep_type = -1;
 
@@ -150,31 +154,42 @@ enum wifi_nrf_status wifi_nrf_fmac_dev_add_linux(void)
 		goto out;
 	}
 
-
+	for (i = 0; i < MAX_NUM_VIFS; i++) {
+		if (rpu_ctx_linux->vif_ctx_linux[i] == NULL) {
+			rpu_ctx_linux->vif_ctx_linux[i] = nrf700x_cfg80211_init(dev);
+			if (rpu_ctx_linux->vif_ctx_linux[i]) {
+				vif_ctx = rpu_ctx_linux->vif_ctx_linux[i];
+				rpu_ctx_linux->vif_ctx_linux[i]->rpu_ctx_linux = rpu_ctx_linux;
+				break;
+			} else {
+				printk("Failed to init cfg80211\n");
+				return WIFI_NRF_STATUS_FAIL;
+			}
+		}
+	}
+	vif_ctx->fmac_event_q = &rpu_drv_priv_linux.fmac_event_q;
 	memset(&add_vif_info, 0, sizeof(add_vif_info));
 	add_vif_info.iftype = NRF_WIFI_IFTYPE_STATION;
 	memcpy(add_vif_info.ifacename, "wlan0", strlen("wlan0"));
-	/* Currently only 1 VIF is supported */
-	vif_idx = wifi_nrf_fmac_add_vif(rpu_ctx,
-							&rpu_ctx_linux->vif_ctx_linux,
+	vif_ctx->vif_idx = wifi_nrf_fmac_add_vif(rpu_ctx,
+							vif_ctx,
 							&add_vif_info);
-	if (vif_idx >= MAX_NUM_VIFS) {
+	if (vif_ctx->vif_idx >= MAX_NUM_VIFS) {
 		printk("%s: FMAC returned invalid interface index\n", __func__);
 		goto out;
 	}
-	printk("vif:%u\n", vif_idx);
-	vif_ctx = &rpu_ctx_linux->vif_ctx_linux;
+	printk("vif:%u\n", vif_ctx->vif_idx);
 
 	status = wifi_nrf_fmac_otp_mac_addr_get(rpu_ctx,
-						vif_idx,
-						addr);
+						vif_ctx->vif_idx,
+						vif_ctx->mac_addr);
 	if (status != WIFI_NRF_STATUS_SUCCESS) {
 		printk("%s: Fetching of MAC address from OTP failed\n",
 			__func__);
 		goto out;
 	}
-	printk("mac addr: %x %x %x %x %x %x \n", addr[0], addr[1], addr[2], addr[3], addr[4],addr[5]);
-	status = wifi_nrf_fmac_set_vif_macaddr(rpu_ctx, vif_idx, addr);
+	//printk("mac addr: %x %x %x %x %x %x \n", addr[0], addr[1], addr[2], addr[3], addr[4],addr[5]);
+	status = wifi_nrf_fmac_set_vif_macaddr(rpu_ctx, vif_ctx->vif_idx, vif_ctx->mac_addr);
 	if (status != WIFI_NRF_STATUS_SUCCESS) {
 		printk("%s: MAC address change failed\n",
 			__func__);
@@ -184,7 +199,7 @@ enum wifi_nrf_status wifi_nrf_fmac_dev_add_linux(void)
 	memset(&chg_vif_info, 0, sizeof(chg_vif_info));
 	chg_vif_info.state = WIFI_NRF_FMAC_IF_OP_STATE_UP;
 	memcpy(chg_vif_info.ifacename, "wlan0", strlen("wlan0"));
-	status = wifi_nrf_fmac_chg_vif_state(rpu_ctx, vif_idx, &chg_vif_info);
+	status = wifi_nrf_fmac_chg_vif_state(rpu_ctx, vif_ctx->vif_idx, &chg_vif_info);
 	if (status != WIFI_NRF_STATUS_SUCCESS) {
 		printk("%s: wifi_nrf_fmac_chg_vif_state failed\n",
 			__func__);
@@ -192,16 +207,17 @@ enum wifi_nrf_status wifi_nrf_fmac_dev_add_linux(void)
 	}
 
 	msleep(100);
+	//rpu_ctx_linux->vif_ctx_linux.dev = dev;
 
-	status = wifi_nrf_fmac_get_wiphy(rpu_ctx, vif_idx);
+	status = wifi_nrf_fmac_get_wiphy(rpu_ctx, vif_ctx->vif_idx);
 	if (status != WIFI_NRF_STATUS_SUCCESS) {
 		printk("%s: nrf_wifi_fmac_get_wiphy failed\n", __func__);
 	}
 
-	vif_ctx->vif_idx = vif_idx;
-	vif_ctx->scan_request = NULL;
-	INIT_WORK(&vif_ctx->ws_scan, nrf700x_scan_routine);
-        sema_init(&vif_ctx->sem, 1);
+	//vif_ctx->vif_idx = vif_idx;
+	//vif_ctx->scan_request = NULL;
+	//vif_ctx->vif_status = NRF700X_VIF_IDLE;
+	//INIT_WORK(&vif_ctx->ws_scan, nrf700x_scan_routine);
 
 out:
     return status;
@@ -221,9 +237,20 @@ static int __init nrf_wifi_init(void) {
 	struct wifi_nrf_fmac_callbk_fns callbk_fns = { 0 };
 	struct nrf_wifi_data_config_params data_config = { 0 };
 	struct rx_buf_pool_params rx_buf_pools[MAX_NUM_OF_RX_QUEUES];
-	//struct wifi_nrf_vif_ctx_zep * = dev->data;
 
-	//vif_ctx_zep->rpu_ctx_zep = &rpu_drv_priv_linux.rpu_ctx_zep;
+	if ((CONFIG_NRF700X_MAX_TX_TOKENS >= 1) &&
+		(CONFIG_NRF700X_MAX_TX_AGGREGATION <= 16) &&
+		(CONFIG_NRF700X_RX_NUM_BUFS >= 1) &&
+		(RPU_PKTRAM_SIZE >= (TOTAL_TX_SIZE + TOTAL_RX_SIZE))) {
+		printk("Init config check ok\n");
+	} else {
+		printk("Init config check fail\n");
+		return -1;
+	}
+
+	spin_lock_init(&rpu_drv_priv_linux.evt_q_lock);
+	INIT_LIST_HEAD(&rpu_drv_priv_linux.fmac_event_q);
+    INIT_WORK(&rpu_drv_priv_linux.ws_event, fmac_event_handler_routine);
 #ifdef CONFIG_NRF700X_DATA_TX
 	data_config.aggregation = aggregation;
 	data_config.wmm = wmm;
@@ -234,8 +261,8 @@ static int __init nrf_wifi_init(void) {
 	data_config.max_rxampdu_size = max_rxampdu_size;
 	data_config.rate_protection_type = rate_protection_type;
 
-	callbk_fns.if_carr_state_chg_callbk_fn = wifi_nrf_if_carr_state_chg;
-	callbk_fns.rx_frm_callbk_fn = wifi_nrf_if_rx_frm;
+	callbk_fns.if_carr_state_chg_callbk_fn = nrf_wifi_umac_event_carr_state_chg;
+	callbk_fns.rx_frm_callbk_fn = nrf_wifi_umac_event_rx_frm_linux;
 #endif
 	rx_buf_pools[0].num_bufs = rx1_num_bufs;
 	rx_buf_pools[1].num_bufs = rx2_num_bufs;
@@ -244,19 +271,19 @@ static int __init nrf_wifi_init(void) {
 	rx_buf_pools[1].buf_sz = rx2_buf_sz;
 	rx_buf_pools[2].buf_sz = rx3_buf_sz;
 
-	callbk_fns.scan_start_callbk_fn = wifi_nrf_event_proc_scan_start_linux;
-	callbk_fns.scan_done_callbk_fn = wifi_nrf_event_proc_scan_done_linux;
-	callbk_fns.disp_scan_res_callbk_fn = wifi_nrf_event_proc_disp_scan_res_linux;
+	callbk_fns.scan_start_callbk_fn = nrf_wifi_umac_event_trigger_scan_linux;
+	callbk_fns.scan_done_callbk_fn = nrf_wifi_umac_event_trigger_scan_linux;
+	callbk_fns.disp_scan_res_callbk_fn = nrf_wifi_umac_event_new_scan_display_results_linux;
 	//callbk_fns.twt_config_callbk_fn = wifi_nrf_event_proc_twt_setup_zep;
 	//callbk_fns.twt_teardown_callbk_fn = wifi_nrf_event_proc_twt_teardown_zep;
 	//callbk_fns.twt_sleep_callbk_fn = wifi_nrf_event_proc_twt_sleep_zep;
 	//callbk_fns.event_get_reg = wifi_nrf_event_get_reg_zep;
 #ifdef CONFIG_WPA_SUPP
-	//callbk_fns.scan_res_callbk_fn = wifi_nrf_wpa_supp_event_proc_scan_res;
-	//callbk_fns.auth_resp_callbk_fn = wifi_nrf_wpa_supp_event_proc_auth_resp;
-	//callbk_fns.assoc_resp_callbk_fn = wifi_nrf_wpa_supp_event_proc_assoc_resp;
+	callbk_fns.scan_res_callbk_fn = nrf_wifi_umac_event_new_scan_results_linux;
+	callbk_fns.auth_resp_callbk_fn = nrf_wifi_umac_event_mlme_linux;
+	callbk_fns.assoc_resp_callbk_fn = nrf_wifi_umac_event_mlme_linux;
 	//callbk_fns.deauth_callbk_fn = wifi_nrf_wpa_supp_event_proc_deauth;
-	//callbk_fns.disassoc_callbk_fn = wifi_nrf_wpa_supp_event_proc_disassoc;
+	callbk_fns.disassoc_callbk_fn = wifi_nrf_wpa_supp_event_proc_disassoc;
 	//callbk_fns.get_station_callbk_fn = wifi_nrf_wpa_supp_event_proc_get_sta;
 	//callbk_fns.get_interface_callbk_fn = wifi_nrf_wpa_supp_event_proc_get_if;
 	//callbk_fns.mgmt_tx_status = wifi_nrf_wpa_supp_event_mgmt_tx_status;
@@ -293,10 +320,6 @@ err:
 }
 
 static void __exit nrf_wifi_exit(void) {
-	struct nrf700x_adapter *vif_ctx;
-	vif_ctx = &rpu_drv_priv_linux.rpu_ctx_linux.vif_ctx_linux;
-    cancel_work_sync(&vif_ctx->ws_scan);
-	nrf700x_uninit(vif_ctx);
 #if defined(CONFIG_NRF700X_ON_USB_ADAPTER)
 	nrf700x_usb_exit();
 #endif

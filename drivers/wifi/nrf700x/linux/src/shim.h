@@ -16,6 +16,21 @@
 #include <linux/usb.h>
 #endif
 
+#include <net/cfg80211.h>
+
+struct nwb {
+	unsigned char *data;
+	unsigned char *tail;
+	int len;
+	int headroom;
+	void *next;
+	void *priv;
+	int iftype;
+	void *ifaddr;
+	void *dev;
+	int hostbuffer;
+};
+
 #define	USB_INTR_CONTENT_LENGTH		16
 
 struct linux_shim_intr_priv {
@@ -50,4 +65,7 @@ struct work_item {
 	unsigned long data;
 	void (*callback)(unsigned long data);
 };
+
+void *net_pkt_to_nbuf(struct sk_buff *skb);
+
 #endif /* __SHIM_H__ */
