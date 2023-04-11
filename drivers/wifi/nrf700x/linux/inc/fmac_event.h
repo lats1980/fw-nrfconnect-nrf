@@ -19,27 +19,27 @@ struct fmac_event {
 	bool more_res;
 };
 
-void nrf_wifi_umac_event_trigger_scan_linux(void *os_vif_ctx,
+void nrf_wifi_umac_event_trigger_scan_lnx(void *os_vif_ctx,
 					struct nrf_wifi_umac_event_trigger_scan *trigger_scan_event,
 					unsigned int event_len);
 
-void nrf_wifi_umac_event_new_scan_display_results_linux(void *os_vif_ctx,
+void nrf_wifi_umac_event_new_scan_display_results_lnx(void *os_vif_ctx,
 					struct nrf_wifi_umac_event_new_scan_display_results *scan_res,
 					unsigned int event_len,
 					bool more_res);
 
-void nrf_wifi_umac_event_new_scan_results_linux(void *os_vif_ctx,
+void nrf_wifi_umac_event_new_scan_results_lnx(void *os_vif_ctx,
 				   struct nrf_wifi_umac_event_new_scan_results *scan_res,
 				   unsigned int event_len,
 				   bool more_res);
 
-void nrf_wifi_umac_event_mlme_linux(void *os_vif_ctx,
+void nrf_wifi_umac_event_mlme_lnx(void *os_vif_ctx,
 					    struct nrf_wifi_umac_event_mlme *mlme,
 					    unsigned int event_len);
 
-enum wifi_nrf_status nrf_wifi_umac_event_carr_state_chg(void *vif_ctx,
+enum wifi_nrf_status nrf_wifi_umac_event_carr_state_chg_lnx(void *vif_ctx,
 						enum wifi_nrf_fmac_if_carr_state carr_state);
 
-void nrf_wifi_umac_event_rx_frm_linux(void *os_vif_ctx, void *frm);
+void nrf_wifi_umac_event_rx_frm_lnx(void *os_vif_ctx, void *frm);
 
 #endif /* __FMAC_EVENT_H__ */

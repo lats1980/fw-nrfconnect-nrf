@@ -3,20 +3,26 @@
 
 #include <net/cfg80211.h>
 #include <fmac_api.h>
+#include "fmac_event.h"
 
-#define WIPHY_NAME "nrf700x"
-#define NDEV_NAME "nrf700x%d"
+#define WIPHY_NAME "nrf_wifi"
+#define NDEV_NAME "nrf_wifi%d"
 
-enum nrf700x_vif_status {
-	NRF700X_VIF_IDLE,
-	NRF700X_VIF_CONNECTING,
-	NRF700X_VIF_CONNECTED
+enum nrf_vif_status {
+	NRF_VIF_IDLE,
+	NRF_VIF_CONNECTING,
+	NRF_VIF_CONNECTED
 };
 
-struct nrf700x_adapter {
+struct ndev_priv_context {
+	struct nrf_vif_priv *nrf_vif;
+	struct wireless_dev wdev;
+};
+
+struct nrf_vif_priv {
     struct wiphy *wiphy;
     struct net_device *ndev;
-	struct wifi_nrf_ctx_linux *rpu_ctx_linux;
+	struct wifi_nrf_rpu_priv_lnx *rpu_priv;
 
 	struct list_head *fmac_event_q;
 
@@ -31,13 +37,13 @@ struct nrf700x_adapter {
 	struct work_struct ws_data_tx;
 #endif
 	unsigned char vif_idx;
-	enum nrf700x_vif_status vif_status;
+	enum nrf_vif_status vif_status;
 	u8 mac_addr[ETH_ALEN];
 };
 
-struct nrf700x_adapter *nrf700x_cfg80211_init(struct device *dev);
+struct wifi_nrf_rpu_priv_lnx *nrf_cfg80211_init(struct device *dev);
 
-void nrf700x_uninit(struct nrf700x_adapter *ctx);
+void nrf_cfg80211_uninit(struct wifi_nrf_rpu_priv_lnx *rpu_priv);
 
 void cfg80211_process_fmac_event(struct fmac_event *event);
 

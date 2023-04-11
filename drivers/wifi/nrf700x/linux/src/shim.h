@@ -33,29 +33,29 @@ struct nwb {
 
 #define	USB_INTR_CONTENT_LENGTH		16
 
-struct linux_shim_intr_priv {
+struct lnx_shim_intr_priv {
 	void *callbk_data;
 	int (*callbk_fn)(void *callbk_data);
 	struct work_struct work;
 };
 
-struct linux_shim_bus_qspi_priv {
+struct lnx_shim_bus_qspi_priv {
 #if defined(CONFIG_NRF700X_ON_USB_ADAPTER)
 	struct usb_device *usbdev;
 	struct urb *urb;
 	u8 int_buf[USB_INTR_CONTENT_LENGTH];
 #endif
-	struct linux_shim_intr_priv intr_priv;
+	struct lnx_shim_intr_priv intr_priv;
 	bool dev_added;
 	bool dev_init;
 };
 
-struct linux_shim_llist_node {
+struct lnx_shim_llist_node {
 	void *data;
 	struct list_head list;
 };
 
-struct linux_shim_llist {
+struct lnx_shim_llist {
 	unsigned int len;
 	struct list_head list;
 };

@@ -12,34 +12,24 @@
 #ifndef __LINUX_FMAC_MAIN_H__
 #define __LINUX_FMAC_MAIN_H__
 
+#include "fmac_event.h"
 #include "cfg80211.h"
 
-struct wifi_nrf_ctx_linux {
-	struct wifi_nrf_drv_priv_linux *drv_priv_linux;
+struct wifi_nrf_rpu_priv_lnx {
+	struct wifi_nrf_drv_priv_lnx *drv_priv;
 	void *rpu_ctx;
-
-#ifdef CONFIG_NRF700X_RADIO_TEST
-	struct rpu_conf_params conf_params;
-	bool rf_test_run;
-	unsigned char rf_test;
-#else /* CONFIG_NRF700X_RADIO_TEST */
-	struct nrf700x_adapter *vif_ctx_linux[MAX_NUM_VIFS];
-#ifdef CONFIG_NRF700X_WIFI_UTIL
-	struct rpu_conf_params conf_params;
-#endif /* CONFIG_NRF700X_WIFI_UTIL */
-#endif /* CONFIG_NRF700X_RADIO_TEST */
+	struct wiphy *wiphy;
+	struct nrf_vif_priv vif_priv[MAX_NUM_VIFS];
 };
 
-struct wifi_nrf_drv_priv_linux {
+struct wifi_nrf_drv_priv_lnx {
 	struct wifi_nrf_fmac_priv *fmac_priv;
 	spinlock_t evt_q_lock;
 	struct list_head fmac_event_q;
 	struct work_struct ws_event;
-	/* TODO: Replace with a linked list to handle unlimited RPUs */
-	struct wifi_nrf_ctx_linux rpu_ctx_linux;
 };
 
-enum wifi_nrf_status wifi_nrf_fmac_dev_add_linux(struct device *dev);
-void wifi_nrf_fmac_dev_rem_linux(struct wifi_nrf_drv_priv_linux *drv_priv_linux);
+struct wifi_nrf_rpu_priv_lnx *wifi_nrf_fmac_dev_add_lnx(struct device *dev);
+void wifi_nrf_fmac_dev_rem_lnx(struct wifi_nrf_rpu_priv_lnx *drv_priv);
 
 #endif /* __LINUX_FMAC_MAIN_H__ */

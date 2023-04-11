@@ -1,10 +1,15 @@
-MODULE_NAME = nrf700x
+ifeq ($(bus), usb)
+	MODULE_NAME=nrf_wifi_usb
+endif
+
+ifeq ($(bus), spi)
+	MODULE_NAME=nrf_wifi_spi
+endif
 
 #TODO: only include spi/usb related files
 ccflags-y += \
 		-DCONFIG_WPA_SUPP \
 		-DCONFIG_NRF700X_DATA_TX \
-		-DCONFIG_NRF700X_ON_USB_ADAPTER \
 		-D CONFIG_NRF700X_MAX_TX_TOKENS=10 \
 		-D CONFIG_NRF700X_MAX_TX_AGGREGATION=6 \
 		-D CONFIG_NRF700X_TX_MAX_DATA_SIZE=1600 \
@@ -50,13 +55,25 @@ module_objects	+= \
 		$(FW_IF_SRC)/rx.o \
 		$(FW_IF_SRC)/fmac_vif.o \
 		$(FW_IF_SRC)/fmac_util.o \
-		$(FW_IF_SRC)/fmac_peer.o
+		$(FW_IF_SRC)/fmac_peer.o \
+		$(FW_IF_SRC)/tx.o
 
-module_objects	+= \
-	$(FW_IF_SRC)/tx.o \
-	$(FW_IF_SRC)/fmac_peer.o
+ifeq ($(bus), usb)
+ccflags-y += -DCONFIG_NRF700X_ON_USB_ADAPTER
+module_objects += src/nrf_wifi_usb.o
+endif
 
-$(MODULE_NAME)-y := main.o src/shim.o $(module_objects) src/nrf700x_usb.o src/cfg80211.o src/fmac_event.o
+ifeq ($(bus), spi)
+ccflags-y += -DCONFIG_NRF700X_ON_SPI
+module_objects += src/nrf_wifi_spi.o
+endif
+
+module_objects += \
+			src/shim.o \
+			src/fmac_event.o \
+			src/cfg80211.o
+
+$(MODULE_NAME)-y := $(module_objects) main.o
 
 all: clean
 #	make ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL) M=$(PWD) modules

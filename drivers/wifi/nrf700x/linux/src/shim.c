@@ -3,7 +3,6 @@
 #include <linux/delay.h>
 
 #include "shim.h"
-#include "usb_request.h"
 #include "bal_api.h"
 
 #include "osal_ops.h"
@@ -11,6 +10,7 @@
 #include "qspi_if.h"
 #include "rpu_hw_if.h"
 #elif defined(CONFIG_NRF700X_ON_USB_ADAPTER)
+#include "usb_request.h"
 #else
 #include "spi_if.h"
 #endif
@@ -19,35 +19,42 @@
 
 #define MAX_BULK_PACKET_SIZE 64
 
-static void *linux_shim_mem_alloc(size_t size)
+#if defined(CONFIG_NRF700X_ON_USB_ADAPTER)
+static struct semaphore usb_lock;
+#endif
+
+static void *lnx_shim_mem_alloc(size_t size)
 {
 	size = (size + 4) & 0xfffffffc;
 	return kmalloc(size, GFP_KERNEL);
 }
 
-static void *linux_shim_mem_zalloc(size_t size)
+static void *lnx_shim_mem_zalloc(size_t size)
 {
 	size = (size + 4) & 0xfffffffc;
 	return kcalloc(size, sizeof(char), GFP_KERNEL);
 }
 
-static void linux_shim_mem_free(void *buf)
+static void lnx_shim_mem_free(void *buf)
 {
 	return kfree(buf);
 }
 
 #if defined(CONFIG_NRF700X_ON_USB_ADAPTER)
-static unsigned int linux_shim_usb_read_reg32(void *priv, unsigned long addr)
+static unsigned int lnx_shim_usb_read_reg32(void *priv, unsigned long addr)
 {
-	struct linux_shim_bus_qspi_priv *qspi_priv = priv;
+	struct lnx_shim_bus_qspi_priv *qspi_priv = priv;
 	int ret, retry_cnt;
 	struct rpu_request *req;
 	u8 *buf = NULL;
 	uint32_t val;
 
+	down(&usb_lock);
+
 	req = kcalloc(sizeof(*req), sizeof(char), GFP_KERNEL);
 	if (!req) {
 		printk("%s: Unable to allocate memory\n", __func__);
+		up(&usb_lock);
 		return 0xFFFFFFFF;
 	}
 	req->cmd = REGISTER_READ;
@@ -63,8 +70,8 @@ retry_tx:
 	if (ret < 0) {
 		if (retry_cnt > 100) {
 			printk("%s: Unable to send usb control msg: %u %d received\n", __func__, REGISTER_READ, ret);
-			kfree(req);
-			return 0xFFFFFFFF;
+			val = 0xFFFFFFFF;
+			goto out;
 		}
 		msleep(10);
 		goto retry_tx;
@@ -82,28 +89,33 @@ retry_rx:
 	if (ret != sizeof(val)) {
 		if (retry_cnt > 10000) {
 			printk("%s: Unable to receive usb control msg: %u %d received\n", __func__, REGISTER_READ, ret);
-			kfree(buf);
-			return 0xFFFFFFFF;
+			val = 0xFFFFFFFF;
+			goto out;
 		}
 		usleep_range(100, 200);
 		goto retry_rx;
 	}
 	val = *(uint32_t *)buf;
 	//printk("rr: %lu %u", addr, val);
+out:
 	kfree(buf);
+	up(&usb_lock);
 	return val;
 }
 
-static void linux_shim_usb_write_reg32(void *priv, unsigned long addr, unsigned int val)
+static void lnx_shim_usb_write_reg32(void *priv, unsigned long addr, unsigned int val)
 {
-	struct linux_shim_bus_qspi_priv *qspi_priv = priv;
+	struct lnx_shim_bus_qspi_priv *qspi_priv = priv;
 	int ret, retry_cnt = 0;
 	struct rpu_request *req;
+
+	down(&usb_lock);
 
 	usleep_range(100, 200);
 	req = kcalloc(sizeof(*req), sizeof(char), GFP_KERNEL);
 	if (!req) {
 		printk("%s: Unable to allocate memory\n", __func__);
+		up(&usb_lock);
 		return;
 	}
 	req->cmd = REGISTER_WRITE;
@@ -115,34 +127,39 @@ retry:
 			      usb_sndctrlpipe(qspi_priv->usbdev, 0),
 			      REGISTER_WRITE,
 			      USB_TYPE_VENDOR | USB_DIR_OUT | USB_RECIP_DEVICE, 0, 0, req,
-			      sizeof(*req), 100);
+			      sizeof(*req), 1000);
 	if (ret < 0) {
 		printk("%s: Unable to send usb control msg: %u ret: %d cnt: %d\n", __func__, REGISTER_WRITE, ret, retry_cnt);
-		if (retry_cnt < 3) {
+		if (retry_cnt < 100) {
 			retry_cnt++;
-			msleep(100);
+			msleep(10);
 			goto retry;
 		}
 	}
 	kfree(req);
+	up(&usb_lock);
 	return;
 }
 
-static void linux_shim_usb_cpy_from(void *priv, void *dest, unsigned long addr, size_t count)
+static void lnx_shim_usb_cpy_from(void *priv, void *dest, unsigned long addr, size_t count)
 {
-	struct linux_shim_bus_qspi_priv *qspi_priv = priv;
+	struct lnx_shim_bus_qspi_priv *qspi_priv = priv;
 	struct rpu_request *req;
-	int ret, actual_length, offset;
+	int ret, actual_length, offset, retry_cnt;
 	void *buf;
 
 	if (count % 4 != 0) {
 		count = (count + 4) & 0xfffffffc;
 	}
+
+	down(&usb_lock);
+
 	usleep_range(100, 200);
 	//TO check: is destination allocated as aligned count?
 	req = kcalloc(sizeof(*req), sizeof(char), GFP_KERNEL);
 	if (!req) {
 		printk("%s: Unable to allocate memory\n", __func__);
+		up(&usb_lock);
 		return;
 	}
 	req->cmd = BLOCK_READ;
@@ -156,25 +173,31 @@ static void linux_shim_usb_cpy_from(void *priv, void *dest, unsigned long addr, 
 	buf = kcalloc((int32_t)count, sizeof(char), GFP_KERNEL);
 	if (!buf) {
 		printk("%s: Unable to allocate memory\n", __func__);
+		up(&usb_lock);
 		return;
 	}
 	offset = 0;
+	retry_cnt = 0;
 	while (count - offset > 0) {
 		ret = usb_bulk_msg(qspi_priv->usbdev, usb_rcvbulkpipe(qspi_priv->usbdev, 1), buf + offset, MAX_BULK_PACKET_SIZE, &actual_length, 1000);
 		if (ret) {
-			printk("%s: Unable to receive usb bulk msg: %d actual_length: %u\n", __func__, ret, actual_length);
-			goto out;
+			retry_cnt++;
+			if(retry_cnt > 100) {
+				printk("%s %u %d actual_length: %u\n", __func__, __LINE__, ret, actual_length);
+				goto out;
+			}
 		}
 		offset += actual_length;
 	}
 	memcpy(dest, buf, count);
 out:
 	kfree(buf);
+	up(&usb_lock);
 }
 
-static void linux_shim_usb_cpy_to(void *priv, unsigned long addr, const void *src, size_t count)
+static void lnx_shim_usb_cpy_to(void *priv, unsigned long addr, const void *src, size_t count)
 {
-	struct linux_shim_bus_qspi_priv *qspi_priv = priv;
+	struct lnx_shim_bus_qspi_priv *qspi_priv = priv;
 	struct rpu_request req;
 	int ret, actual_length, retry_cnt;
 	void *buf;
@@ -185,11 +208,14 @@ static void linux_shim_usb_cpy_to(void *priv, unsigned long addr, const void *sr
 	}
 	//printk(KERN_DEBUG "%s: %lu count: %zu\n", __func__, addr, count);
 
+	down(&usb_lock);
+
 	// Add some delay to not flood the MCU while patching
 	usleep_range(100, 200);
 	buf = kcalloc(MAX_BULK_PACKET_SIZE, sizeof(char), GFP_KERNEL);
 	if (!buf) {
 		printk("%s: Unable to allocate memory\n", __func__);
+		up(&usb_lock);
 		return;
 	}
 	req.cmd = BLOCK_WRITE;
@@ -212,9 +238,10 @@ static void linux_shim_usb_cpy_to(void *priv, unsigned long addr, const void *sr
 	}
 out:
 	kfree(buf);
+	up(&usb_lock);
 }
 #endif
-static void *linux_shim_spinlock_alloc(void)
+static void *lnx_shim_spinlock_alloc(void)
 {
 	struct semaphore *lock;
 
@@ -226,37 +253,37 @@ static void *linux_shim_spinlock_alloc(void)
 	return lock;
 }
 
-static void linux_shim_spinlock_free(void *lock)
+static void lnx_shim_spinlock_free(void *lock)
 {
 	kfree(lock);
 }
 
-static void linux_shim_spinlock_init(void *lock)
+static void lnx_shim_spinlock_init(void *lock)
 {
 	sema_init((struct semaphore *)lock, 1);
 }
 
-static void linux_shim_spinlock_take(void *lock)
+static void lnx_shim_spinlock_take(void *lock)
 {
 	down((struct semaphore *)lock);
 }
 
-static void linux_shim_spinlock_rel(void *lock)
+static void lnx_shim_spinlock_rel(void *lock)
 {
 	up((struct semaphore *)lock);
 }
 
-static void linux_shim_spinlock_irq_take(void *lock, unsigned long *flags)
+static void lnx_shim_spinlock_irq_take(void *lock, unsigned long *flags)
 {
 	down((struct semaphore *)lock);
 }
 
-static void linux_shim_spinlock_irq_rel(void *lock, unsigned long *flags)
+static void lnx_shim_spinlock_irq_rel(void *lock, unsigned long *flags)
 {
 	up((struct semaphore *)lock);
 }
 
-static int linux_shim_pr_dbg(const char *fmt, va_list args)
+static int lnx_shim_pr_dbg(const char *fmt, va_list args)
 {
 	char buf[80];
 
@@ -267,7 +294,7 @@ static int linux_shim_pr_dbg(const char *fmt, va_list args)
 	return 0;
 }
 
-static int linux_shim_pr_info(const char *fmt, va_list args)
+static int lnx_shim_pr_info(const char *fmt, va_list args)
 {
 	char buf[80];
 
@@ -278,7 +305,7 @@ static int linux_shim_pr_info(const char *fmt, va_list args)
 	return 0;
 }
 
-static int linux_shim_pr_err(const char *fmt, va_list args)
+static int lnx_shim_pr_err(const char *fmt, va_list args)
 {
 	char buf[256];
 
@@ -289,7 +316,7 @@ static int linux_shim_pr_err(const char *fmt, va_list args)
 	return 0;
 }
 
-static void *linux_shim_nbuf_alloc(unsigned int size)
+static void *lnx_shim_nbuf_alloc(unsigned int size)
 {
 	struct nwb *nwb;
 
@@ -314,7 +341,7 @@ static void *linux_shim_nbuf_alloc(unsigned int size)
 	return nwb;
 }
 
-static void linux_shim_nbuf_free(void *nbuf)
+static void lnx_shim_nbuf_free(void *nbuf)
 {
 	struct nwb *nwb;
 
@@ -325,7 +352,7 @@ static void linux_shim_nbuf_free(void *nbuf)
 	kfree(nbuf);
 }
 
-static void linux_shim_nbuf_headroom_res(void *nbuf, unsigned int size)
+static void lnx_shim_nbuf_headroom_res(void *nbuf, unsigned int size)
 {
 	struct nwb *nwb = (struct nwb *)nbuf;
 
@@ -334,22 +361,22 @@ static void linux_shim_nbuf_headroom_res(void *nbuf, unsigned int size)
 	nwb->headroom += size;
 }
 
-static unsigned int linux_shim_nbuf_headroom_get(void *nbuf)
+static unsigned int lnx_shim_nbuf_headroom_get(void *nbuf)
 {
 	return ((struct nwb *)nbuf)->headroom;
 }
 
-static unsigned int linux_shim_nbuf_data_size(void *nbuf)
+static unsigned int lnx_shim_nbuf_data_size(void *nbuf)
 {
 	return ((struct nwb *)nbuf)->len;
 }
 
-static void *linux_shim_nbuf_data_get(void *nbuf)
+static void *lnx_shim_nbuf_data_get(void *nbuf)
 {
 	return ((struct nwb *)nbuf)->data;
 }
 
-static void *linux_shim_nbuf_data_put(void *nbuf, unsigned int size)
+static void *lnx_shim_nbuf_data_put(void *nbuf, unsigned int size)
 {
 	struct nwb *nwb = (struct nwb *)nbuf;
 	unsigned char *data = nwb->tail;
@@ -360,7 +387,7 @@ static void *linux_shim_nbuf_data_put(void *nbuf, unsigned int size)
 	return data;
 }
 
-static void *linux_shim_nbuf_data_push(void *nbuf, unsigned int size)
+static void *lnx_shim_nbuf_data_push(void *nbuf, unsigned int size)
 {
 	struct nwb *nwb = (struct nwb *)nbuf;
 
@@ -371,7 +398,7 @@ static void *linux_shim_nbuf_data_push(void *nbuf, unsigned int size)
 	return nwb->data;
 }
 
-static void *linux_shim_nbuf_data_pull(void *nbuf, unsigned int size)
+static void *lnx_shim_nbuf_data_pull(void *nbuf, unsigned int size)
 {
 	struct nwb *nwb = (struct nwb *)nbuf;
 
@@ -391,24 +418,24 @@ void *net_pkt_to_nbuf(struct sk_buff *skb)
 
 	len = skb->len;
 
-	nwb = linux_shim_nbuf_alloc(len + 100);
+	nwb = lnx_shim_nbuf_alloc(len + 100);
 
 	if (!nwb) {
 		printk("%s: Fail to allocate nwb\n", __func__);
 		return NULL;
 	}
 
-	linux_shim_nbuf_headroom_res(nwb, 100);
+	lnx_shim_nbuf_headroom_res(nwb, 100);
 
-	data = linux_shim_nbuf_data_put(nwb, len);
+	data = lnx_shim_nbuf_data_put(nwb, len);
 	memcpy(data, skb->data, len);
 
 	return nwb;
 }
 
-static void *linux_shim_llist_node_alloc(void)
+static void *lnx_shim_llist_node_alloc(void)
 {
-	struct linux_shim_llist_node *llist_node = NULL;
+	struct lnx_shim_llist_node *llist_node = NULL;
 
 	llist_node = kcalloc(sizeof(*llist_node), sizeof(char), GFP_KERNEL);
 
@@ -422,32 +449,32 @@ static void *linux_shim_llist_node_alloc(void)
 	return llist_node;
 }
 
-static void linux_shim_llist_node_free(void *llist_node)
+static void lnx_shim_llist_node_free(void *llist_node)
 {
 	kfree(llist_node);
 }
 
-static void *linux_shim_llist_node_data_get(void *llist_node)
+static void *lnx_shim_llist_node_data_get(void *llist_node)
 {
-	struct linux_shim_llist_node *linux_llist_node = NULL;
+	struct lnx_shim_llist_node *lnx_llist_node = NULL;
 
-	linux_llist_node = (struct linux_shim_llist_node *)llist_node;
+	lnx_llist_node = (struct lnx_shim_llist_node *)llist_node;
 
-	return linux_llist_node->data;
+	return lnx_llist_node->data;
 }
 
-static void linux_shim_llist_node_data_set(void *llist_node, void *data)
+static void lnx_shim_llist_node_data_set(void *llist_node, void *data)
 {
-	struct linux_shim_llist_node *linux_llist_node = NULL;
+	struct lnx_shim_llist_node *lnx_llist_node = NULL;
 
-	linux_llist_node = (struct linux_shim_llist_node *)llist_node;
+	lnx_llist_node = (struct lnx_shim_llist_node *)llist_node;
 
-	linux_llist_node->data = data;
+	lnx_llist_node->data = data;
 }
 
-static void *linux_shim_llist_alloc(void)
+static void *lnx_shim_llist_alloc(void)
 {
-	struct linux_shim_llist *llist = NULL;
+	struct lnx_shim_llist *llist = NULL;
 
 	llist = kcalloc(sizeof(*llist), sizeof(char), GFP_KERNEL);
 	if (!llist) {
@@ -457,91 +484,91 @@ static void *linux_shim_llist_alloc(void)
 	return llist;
 }
 
-static void linux_shim_llist_free(void *llist)
+static void lnx_shim_llist_free(void *llist)
 {
 	kfree(llist);
 }
 
-static void linux_shim_llist_init(void *llist)
+static void lnx_shim_llist_init(void *llist)
 {
-	struct linux_shim_llist *linux_llist = NULL;
+	struct lnx_shim_llist *lnx_llist = NULL;
 
-	linux_llist = (struct linux_shim_llist *)llist;
-	INIT_LIST_HEAD(&linux_llist->list);
-	linux_llist->len = 0;
+	lnx_llist = (struct lnx_shim_llist *)llist;
+	INIT_LIST_HEAD(&lnx_llist->list);
+	lnx_llist->len = 0;
 }
 
-static void linux_shim_llist_add_node_tail(void *llist, void *llist_node)
+static void lnx_shim_llist_add_node_tail(void *llist, void *llist_node)
 {
-	struct linux_shim_llist *linux_llist = NULL;
-	struct linux_shim_llist_node *linux_node = NULL;
+	struct lnx_shim_llist *lnx_llist = NULL;
+	struct lnx_shim_llist_node *lnx_node = NULL;
 
-	linux_llist = (struct linux_shim_llist *)llist;
-	linux_node = (struct linux_shim_llist_node *)llist_node;
+	lnx_llist = (struct lnx_shim_llist *)llist;
+	lnx_node = (struct lnx_shim_llist_node *)llist_node;
 
-	list_add_tail(&linux_node->list, &linux_llist->list);
-	linux_llist->len += 1;
+	list_add_tail(&lnx_node->list, &lnx_llist->list);
+	lnx_llist->len += 1;
 }
 
-static void *linux_shim_llist_get_node_head(void *llist)
+static void *lnx_shim_llist_get_node_head(void *llist)
 {
-	struct linux_shim_llist_node *linux_head_node = NULL;
-	struct linux_shim_llist *linux_llist = NULL;
+	struct lnx_shim_llist_node *lnx_head_node = NULL;
+	struct lnx_shim_llist *lnx_llist = NULL;
 
-	linux_llist = (struct linux_shim_llist *)llist;
+	lnx_llist = (struct lnx_shim_llist *)llist;
 
-	if (!linux_llist->len) {
+	if (!lnx_llist->len) {
 		return NULL;
 	}
 
-	linux_head_node = (struct linux_shim_llist_node *)container_of(linux_llist->list.next,
-								       struct linux_shim_llist_node,
+	lnx_head_node = (struct lnx_shim_llist_node *)container_of(lnx_llist->list.next,
+								       struct lnx_shim_llist_node,
 								       list);
 
-	return linux_head_node;
+	return lnx_head_node;
 }
 
-static void *linux_shim_llist_get_node_nxt(void *llist, void *llist_node)
+static void *lnx_shim_llist_get_node_nxt(void *llist, void *llist_node)
 {
-	struct linux_shim_llist_node *linux_node = NULL;
-	struct linux_shim_llist_node *linux_nxt_node = NULL;
-	struct linux_shim_llist *linux_llist = NULL;
+	struct lnx_shim_llist_node *lnx_node = NULL;
+	struct lnx_shim_llist_node *lnx_nxt_node = NULL;
+	struct lnx_shim_llist *lnx_llist = NULL;
 
-	linux_llist = (struct linux_shim_llist *)llist;
-	linux_node = (struct linux_shim_llist_node *)llist_node;
+	lnx_llist = (struct lnx_shim_llist *)llist;
+	lnx_node = (struct lnx_shim_llist_node *)llist_node;
 
-	if (linux_node->list.next == &linux_llist->list)
+	if (lnx_node->list.next == &lnx_llist->list)
 		return NULL;
 
-	linux_nxt_node = (struct linux_shim_llist_node *)container_of(linux_node->list.next,
-								      struct linux_shim_llist_node,
+	lnx_nxt_node = (struct lnx_shim_llist_node *)container_of(lnx_node->list.next,
+								      struct lnx_shim_llist_node,
 								      list);
 
-	return linux_nxt_node;
+	return lnx_nxt_node;
 }
 
-static void linux_shim_llist_del_node(void *llist, void *llist_node)
+static void lnx_shim_llist_del_node(void *llist, void *llist_node)
 {
-	struct linux_shim_llist_node *linux_node = NULL;
-	struct linux_shim_llist *linux_llist = NULL;
+	struct lnx_shim_llist_node *lnx_node = NULL;
+	struct lnx_shim_llist *lnx_llist = NULL;
 
-	linux_llist = (struct linux_shim_llist *)llist;
-	linux_node = (struct linux_shim_llist_node *)llist_node;
+	lnx_llist = (struct lnx_shim_llist *)llist;
+	lnx_node = (struct lnx_shim_llist_node *)llist_node;
 
-	list_del(&linux_node->list);
-	linux_llist->len -= 1;
+	list_del(&lnx_node->list);
+	lnx_llist->len -= 1;
 }
 
-static unsigned int linux_shim_llist_len(void *llist)
+static unsigned int lnx_shim_llist_len(void *llist)
 {
-	struct linux_shim_llist *linux_llist = NULL;
+	struct lnx_shim_llist *lnx_llist = NULL;
 
-	linux_llist = (struct linux_shim_llist *)llist;
+	lnx_llist = (struct lnx_shim_llist *)llist;
 
-	return linux_llist->len;
+	return lnx_llist->len;
 }
 
-static void *linux_shim_work_alloc(void)
+static void *lnx_shim_work_alloc(void)
 {
 	struct work_item *item = NULL;
 
@@ -555,7 +582,7 @@ out:
 	return item;
 }
 
-static void linux_shim_work_free(void *item)
+static void lnx_shim_work_free(void *item)
 {
 	return kfree(item);
 }
@@ -568,7 +595,7 @@ static void fn_worker(struct work_struct *worker)
 	item_ctx->callback(item_ctx->data);
 }
 
-static void linux_shim_work_init(void *item, void (*callback)(unsigned long data),
+static void lnx_shim_work_init(void *item, void (*callback)(unsigned long data),
 				  unsigned long data)
 {
 	struct work_item *item_ctx = NULL;
@@ -579,7 +606,7 @@ static void linux_shim_work_init(void *item, void (*callback)(unsigned long data
 	INIT_WORK(&item_ctx->work, fn_worker);
 }
 
-static void linux_shim_work_schedule(void *item)
+static void lnx_shim_work_schedule(void *item)
 {
 	struct work_item *item_ctx = NULL;
 
@@ -587,7 +614,7 @@ static void linux_shim_work_schedule(void *item)
 	schedule_work(&item_ctx->work);
 }
 
-static void linux_shim_work_kill(void *item)
+static void lnx_shim_work_kill(void *item)
 {
 	struct work_item *item_ctx = NULL;
 
@@ -595,35 +622,35 @@ static void linux_shim_work_kill(void *item)
 	cancel_work_sync(&item_ctx->work);
 }
 
-static int linux_shim_msleep(int msecs)
+static int lnx_shim_msleep(int msecs)
 {
 	msleep((unsigned int)msecs);
 
 	return 0;
 }
 
-static int linux_shim_usleep(int usecs)
+static int lnx_shim_usleep(int usecs)
 {
 	usleep_range((unsigned int)usecs, (unsigned int)(usecs * 2));
 
 	return 0;
 }
 
-static unsigned long linux_shim_time_get_curr_us(void)
+static unsigned long lnx_shim_time_get_curr_us(void)
 {
 	return ktime_to_us(ktime_get_boottime());
 }
 
-static unsigned int linux_shim_time_elapsed_us(unsigned long start_time_us)
+static unsigned int lnx_shim_time_elapsed_us(unsigned long start_time_us)
 {
 	unsigned long curr_time_us = 0;
 
-	curr_time_us = linux_shim_time_get_curr_us();
+	curr_time_us = lnx_shim_time_get_curr_us();
 
 	return curr_time_us - start_time_us;
 }
 
-static enum wifi_nrf_status linux_shim_bus_qspi_dev_init(void *os_qspi_dev_ctx)
+static enum wifi_nrf_status lnx_shim_bus_qspi_dev_init(void *os_qspi_dev_ctx)
 {
 	enum wifi_nrf_status status = WIFI_NRF_STATUS_FAIL;
 	struct qspi_dev *dev = NULL;
@@ -635,7 +662,7 @@ static enum wifi_nrf_status linux_shim_bus_qspi_dev_init(void *os_qspi_dev_ctx)
 	return status;
 }
 
-static void linux_shim_bus_qspi_dev_deinit(void *os_qspi_dev_ctx)
+static void lnx_shim_bus_qspi_dev_deinit(void *os_qspi_dev_ctx)
 {
 	struct qspi_dev *dev = NULL;
 
@@ -643,9 +670,11 @@ static void linux_shim_bus_qspi_dev_deinit(void *os_qspi_dev_ctx)
 }
 
 #if defined(CONFIG_NRF700X_ON_USB_ADAPTER)
-static void *linux_shim_bus_usb_init(void)
+static void *lnx_shim_bus_usb_init(void)
 {
-	struct linux_shim_bus_qspi_priv *qspi_priv = NULL;
+	struct lnx_shim_bus_qspi_priv *qspi_priv = NULL;
+
+	sema_init(&usb_lock, 1);
 
 	qspi_priv = kcalloc(sizeof(*qspi_priv), sizeof(char), GFP_KERNEL);
 
@@ -657,26 +686,26 @@ out:
 	return qspi_priv;
 }
 
-static void linux_shim_bus_usb_deinit(void *os_qspi_priv)
+static void lnx_shim_bus_usb_deinit(void *os_qspi_priv)
 {
-	struct linux_shim_bus_qspi_priv *qspi_priv = NULL;
+	struct lnx_shim_bus_qspi_priv *qspi_priv = NULL;
 
 	qspi_priv = os_qspi_priv;
 
 	kfree(qspi_priv);
 }
 
-static void *linux_shim_bus_usb_dev_add(void *os_qspi_priv, void *osal_qspi_dev_ctx)
+static void *lnx_shim_bus_usb_dev_add(void *os_qspi_priv, void *osal_qspi_dev_ctx)
 {
-	struct linux_shim_bus_qspi_priv *linux_qspi_priv = NULL;
+	struct lnx_shim_bus_qspi_priv *lnx_qspi_priv = NULL;
 	u32 size;
 	int ret;
 
-	linux_qspi_priv = os_qspi_priv;
+	lnx_qspi_priv = os_qspi_priv;
 
 	/* Send control msg to add Wi-Fi device */
-	ret = usb_control_msg(linux_qspi_priv->usbdev,
-			      usb_sndctrlpipe(linux_qspi_priv->usbdev, 0),
+	ret = usb_control_msg(lnx_qspi_priv->usbdev,
+			      usb_sndctrlpipe(lnx_qspi_priv->usbdev, 0),
 			      RPU_ENABLE,
 			      USB_TYPE_VENDOR | USB_DIR_OUT | USB_RECIP_DEVICE, 0, 0, NULL,
 			      0, 1000);
@@ -685,8 +714,8 @@ static void *linux_shim_bus_usb_dev_add(void *os_qspi_priv, void *osal_qspi_dev_
 		return NULL;
 	}
 
-	ret = usb_control_msg(linux_qspi_priv->usbdev,
-			      usb_sndctrlpipe(linux_qspi_priv->usbdev, 0),
+	ret = usb_control_msg(lnx_qspi_priv->usbdev,
+			      usb_sndctrlpipe(lnx_qspi_priv->usbdev, 0),
 			      IRQ_ENABLE,
 			      USB_TYPE_VENDOR | USB_DIR_OUT | USB_RECIP_DEVICE, 0, 0, NULL,
 			      0, 1000);
@@ -695,12 +724,12 @@ static void *linux_shim_bus_usb_dev_add(void *os_qspi_priv, void *osal_qspi_dev_
 		return NULL;
 	}
 
-	linux_qspi_priv->dev_added = true;
+	lnx_qspi_priv->dev_added = true;
 
-	return linux_qspi_priv;
+	return lnx_qspi_priv;
 }
 
-static void linux_shim_bus_usb_dev_rem(void *os_qspi_dev_ctx)
+static void lnx_shim_bus_usb_dev_rem(void *os_qspi_dev_ctx)
 {
 	struct qspi_dev *dev = NULL;
 
@@ -726,11 +755,11 @@ static void zep_shim_bus_qspi_dev_host_map_get(void *os_qspi_dev_ctx,
 
 static void irq_work_handler(struct work_struct* work)
 {
-	struct linux_shim_intr_priv *intr_priv = NULL;
+	struct lnx_shim_intr_priv *intr_priv = NULL;
 	int ret = 0;
 
 	intr_priv =
-		(struct linux_shim_intr_priv *)container_of(work, struct linux_shim_intr_priv, work);
+		(struct lnx_shim_intr_priv *)container_of(work, struct lnx_shim_intr_priv, work);
 
 	if(!intr_priv) {
 		printk("fail to get back intr priv\n");
@@ -744,7 +773,7 @@ static void irq_work_handler(struct work_struct* work)
 
 static void int_complete(struct urb *urb)
 {
-	struct linux_shim_bus_qspi_priv *linux_qspi_priv = (struct linux_shim_bus_qspi_priv *)urb->context;
+	struct lnx_shim_bus_qspi_priv *lnx_qspi_priv = (struct lnx_shim_bus_qspi_priv *)urb->context;
 	int ret;
 
 	if (urb->status != 0 || !urb->actual_length) {
@@ -752,7 +781,7 @@ static void int_complete(struct urb *urb)
 		return;
 	}
 
-	schedule_work(&linux_qspi_priv->intr_priv.work);
+	schedule_work(&lnx_qspi_priv->intr_priv.work);
 
 	ret = usb_submit_urb(urb, GFP_ATOMIC);
 	if (ret) {
@@ -760,44 +789,44 @@ static void int_complete(struct urb *urb)
 	}
 }
 
-static enum wifi_nrf_status linux_shim_bus_qspi_intr_reg(void *os_dev_ctx, void *callbk_data,
+static enum wifi_nrf_status lnx_shim_bus_qspi_intr_reg(void *os_dev_ctx, void *callbk_data,
 						       int (*callbk_fn)(void *callbk_data))
 {
-	struct linux_shim_bus_qspi_priv *linux_qspi_priv = NULL;
+	struct lnx_shim_bus_qspi_priv *lnx_qspi_priv = NULL;
 	int ret;
 
-	linux_qspi_priv = os_dev_ctx;
-	linux_qspi_priv->urb = usb_alloc_urb(0, GFP_KERNEL);
+	lnx_qspi_priv = os_dev_ctx;
+	lnx_qspi_priv->urb = usb_alloc_urb(0, GFP_KERNEL);
 
-	if (!linux_qspi_priv->urb)
+	if (!lnx_qspi_priv->urb)
 		return WIFI_NRF_STATUS_FAIL;
 
-	usb_fill_int_urb(linux_qspi_priv->urb, linux_qspi_priv->usbdev, usb_rcvintpipe(linux_qspi_priv->usbdev, 2),
-			 linux_qspi_priv->int_buf, USB_INTR_CONTENT_LENGTH,
-			 int_complete, linux_qspi_priv, 10);
-	ret = usb_submit_urb(linux_qspi_priv->urb, GFP_KERNEL);
+	usb_fill_int_urb(lnx_qspi_priv->urb, lnx_qspi_priv->usbdev, usb_rcvintpipe(lnx_qspi_priv->usbdev, 2),
+			 lnx_qspi_priv->int_buf, USB_INTR_CONTENT_LENGTH,
+			 int_complete, lnx_qspi_priv, 10);
+	ret = usb_submit_urb(lnx_qspi_priv->urb, GFP_KERNEL);
 	if (ret) {
 		printk("usb_submit_urb fail: %d\n", ret);
 		goto error;
 	}
 
-	linux_qspi_priv->intr_priv.callbk_data = callbk_data;
-	linux_qspi_priv->intr_priv.callbk_fn = callbk_fn;
-	INIT_WORK(&linux_qspi_priv->intr_priv.work, irq_work_handler);
+	lnx_qspi_priv->intr_priv.callbk_data = callbk_data;
+	lnx_qspi_priv->intr_priv.callbk_fn = callbk_fn;
+	INIT_WORK(&lnx_qspi_priv->intr_priv.work, irq_work_handler);
 
 	return WIFI_NRF_STATUS_SUCCESS;
 
 error:
-	usb_free_urb(linux_qspi_priv->urb);
+	usb_free_urb(lnx_qspi_priv->urb);
 	return WIFI_NRF_STATUS_FAIL;
 }
 
-static void linux_shim_bus_qspi_intr_unreg(void *os_qspi_dev_ctx)
+static void lnx_shim_bus_qspi_intr_unreg(void *os_qspi_dev_ctx)
 {
-	struct linux_shim_bus_qspi_priv *linux_qspi_priv = NULL;
+	struct lnx_shim_bus_qspi_priv *lnx_qspi_priv = NULL;
 
-	linux_qspi_priv = os_qspi_dev_ctx;
-	usb_free_urb(linux_qspi_priv->urb);
+	lnx_qspi_priv = os_qspi_dev_ctx;
+	usb_free_urb(lnx_qspi_priv->urb);
 }
 
 #ifdef CONFIG_NRF_WIFI_LOW_POWER
@@ -837,88 +866,88 @@ static void zep_shim_timer_kill(void *timer)
 }
 #endif /* CONFIG_NRF_WIFI_LOW_POWER */
 
-static const struct wifi_nrf_osal_ops wifi_nrf_os_linux_ops = {
-	.mem_alloc = linux_shim_mem_alloc,
-	.mem_zalloc = linux_shim_mem_zalloc,
-	.mem_free = linux_shim_mem_free,
+static const struct wifi_nrf_osal_ops wifi_nrf_os_lnx_ops = {
+	.mem_alloc = lnx_shim_mem_alloc,
+	.mem_zalloc = lnx_shim_mem_zalloc,
+	.mem_free = lnx_shim_mem_free,
 	.mem_cpy = memcpy,
 	.mem_set = memset,
 #if defined(CONFIG_NRF700X_ON_QSPI)
-	.qspi_read_reg32 = linux_shim_qspi_read_reg32,
-	.qspi_write_reg32 = linux_shim_qspi_write_reg32,
-	.qspi_cpy_from = linux_shim_qspi_cpy_from,
-	.qspi_cpy_to = linux_shim_qspi_cpy_to,
+	.qspi_read_reg32 = lnx_shim_qspi_read_reg32,
+	.qspi_write_reg32 = lnx_shim_qspi_write_reg32,
+	.qspi_cpy_from = lnx_shim_qspi_cpy_from,
+	.qspi_cpy_to = lnx_shim_qspi_cpy_to,
 #elif defined(CONFIG_NRF700X_ON_USB_ADAPTER)
-	.qspi_read_reg32 = linux_shim_usb_read_reg32,
-	.qspi_write_reg32 = linux_shim_usb_write_reg32,
-	.qspi_cpy_from = linux_shim_usb_cpy_from,
-	.qspi_cpy_to = linux_shim_usb_cpy_to,
+	.qspi_read_reg32 = lnx_shim_usb_read_reg32,
+	.qspi_write_reg32 = lnx_shim_usb_write_reg32,
+	.qspi_cpy_from = lnx_shim_usb_cpy_from,
+	.qspi_cpy_to = lnx_shim_usb_cpy_to,
 #endif
-	.spinlock_alloc = linux_shim_spinlock_alloc,
-	.spinlock_free = linux_shim_spinlock_free,
-	.spinlock_init = linux_shim_spinlock_init,
-	.spinlock_take = linux_shim_spinlock_take,
-	.spinlock_rel = linux_shim_spinlock_rel,
+	.spinlock_alloc = lnx_shim_spinlock_alloc,
+	.spinlock_free = lnx_shim_spinlock_free,
+	.spinlock_init = lnx_shim_spinlock_init,
+	.spinlock_take = lnx_shim_spinlock_take,
+	.spinlock_rel = lnx_shim_spinlock_rel,
 
-	.spinlock_irq_take = linux_shim_spinlock_irq_take,
-	.spinlock_irq_rel = linux_shim_spinlock_irq_rel,
+	.spinlock_irq_take = lnx_shim_spinlock_irq_take,
+	.spinlock_irq_rel = lnx_shim_spinlock_irq_rel,
 
-	.log_dbg = linux_shim_pr_dbg,
-	.log_info = linux_shim_pr_info,
-	.log_err = linux_shim_pr_err,
+	.log_dbg = lnx_shim_pr_dbg,
+	.log_info = lnx_shim_pr_info,
+	.log_err = lnx_shim_pr_err,
 
-	.llist_node_alloc = linux_shim_llist_node_alloc,
-	.llist_node_free = linux_shim_llist_node_free,
-	.llist_node_data_get = linux_shim_llist_node_data_get,
-	.llist_node_data_set = linux_shim_llist_node_data_set,
-	.llist_alloc = linux_shim_llist_alloc,
-	.llist_free = linux_shim_llist_free,
-	.llist_init = linux_shim_llist_init,
+	.llist_node_alloc = lnx_shim_llist_node_alloc,
+	.llist_node_free = lnx_shim_llist_node_free,
+	.llist_node_data_get = lnx_shim_llist_node_data_get,
+	.llist_node_data_set = lnx_shim_llist_node_data_set,
+	.llist_alloc = lnx_shim_llist_alloc,
+	.llist_free = lnx_shim_llist_free,
+	.llist_init = lnx_shim_llist_init,
 
-	.llist_add_node_tail = linux_shim_llist_add_node_tail,
-	.llist_get_node_head = linux_shim_llist_get_node_head,
-	.llist_get_node_nxt = linux_shim_llist_get_node_nxt,
-	.llist_del_node = linux_shim_llist_del_node,
-	.llist_len = linux_shim_llist_len,
+	.llist_add_node_tail = lnx_shim_llist_add_node_tail,
+	.llist_get_node_head = lnx_shim_llist_get_node_head,
+	.llist_get_node_nxt = lnx_shim_llist_get_node_nxt,
+	.llist_del_node = lnx_shim_llist_del_node,
+	.llist_len = lnx_shim_llist_len,
 
-	.nbuf_alloc = linux_shim_nbuf_alloc,
-	.nbuf_free = linux_shim_nbuf_free,
-	.nbuf_headroom_res = linux_shim_nbuf_headroom_res,
-	.nbuf_headroom_get = linux_shim_nbuf_headroom_get,
-	.nbuf_data_size = linux_shim_nbuf_data_size,
-	.nbuf_data_get = linux_shim_nbuf_data_get,
-	.nbuf_data_put = linux_shim_nbuf_data_put,
-	.nbuf_data_push = linux_shim_nbuf_data_push,
-	.nbuf_data_pull = linux_shim_nbuf_data_pull,
+	.nbuf_alloc = lnx_shim_nbuf_alloc,
+	.nbuf_free = lnx_shim_nbuf_free,
+	.nbuf_headroom_res = lnx_shim_nbuf_headroom_res,
+	.nbuf_headroom_get = lnx_shim_nbuf_headroom_get,
+	.nbuf_data_size = lnx_shim_nbuf_data_size,
+	.nbuf_data_get = lnx_shim_nbuf_data_get,
+	.nbuf_data_put = lnx_shim_nbuf_data_put,
+	.nbuf_data_push = lnx_shim_nbuf_data_push,
+	.nbuf_data_pull = lnx_shim_nbuf_data_pull,
 
-	.tasklet_alloc = linux_shim_work_alloc,
-	.tasklet_free = linux_shim_work_free,
-	.tasklet_init = linux_shim_work_init,
-	.tasklet_schedule = linux_shim_work_schedule,
-	.tasklet_kill = linux_shim_work_kill,
+	.tasklet_alloc = lnx_shim_work_alloc,
+	.tasklet_free = lnx_shim_work_free,
+	.tasklet_init = lnx_shim_work_init,
+	.tasklet_schedule = lnx_shim_work_schedule,
+	.tasklet_kill = lnx_shim_work_kill,
 
-	.sleep_ms = linux_shim_msleep,
-	.delay_us = linux_shim_usleep,
+	.sleep_ms = lnx_shim_msleep,
+	.delay_us = lnx_shim_usleep,
 
-	.time_get_curr_us = linux_shim_time_get_curr_us,
-	.time_elapsed_us = linux_shim_time_elapsed_us,
+	.time_get_curr_us = lnx_shim_time_get_curr_us,
+	.time_elapsed_us = lnx_shim_time_elapsed_us,
 
 #if defined(CONFIG_NRF700X_ON_QSPI)
-	.bus_qspi_init = linux_shim_bus_qspi_init,
-	.bus_qspi_deinit = linux_shim_bus_qspi_deinit,
-	.bus_qspi_dev_add = linux_shim_bus_qspi_dev_add,
-	.bus_qspi_dev_rem = linux_shim_bus_qspi_dev_rem,
+	.bus_qspi_init = lnx_shim_bus_qspi_init,
+	.bus_qspi_deinit = lnx_shim_bus_qspi_deinit,
+	.bus_qspi_dev_add = lnx_shim_bus_qspi_dev_add,
+	.bus_qspi_dev_rem = lnx_shim_bus_qspi_dev_rem,
 #elif defined(CONFIG_NRF700X_ON_USB_ADAPTER)
-	.bus_qspi_init = linux_shim_bus_usb_init,
-	.bus_qspi_deinit = linux_shim_bus_usb_deinit,
-	.bus_qspi_dev_add = linux_shim_bus_usb_dev_add,
-	.bus_qspi_dev_rem = linux_shim_bus_usb_dev_rem,
+	.bus_qspi_init = lnx_shim_bus_usb_init,
+	.bus_qspi_deinit = lnx_shim_bus_usb_deinit,
+	.bus_qspi_dev_add = lnx_shim_bus_usb_dev_add,
+	.bus_qspi_dev_rem = lnx_shim_bus_usb_dev_rem,
 #else
 #endif
-	.bus_qspi_dev_init = linux_shim_bus_qspi_dev_init,
-	.bus_qspi_dev_deinit = linux_shim_bus_qspi_dev_deinit,
-	.bus_qspi_dev_intr_reg = linux_shim_bus_qspi_intr_reg,
-	.bus_qspi_dev_intr_unreg = linux_shim_bus_qspi_intr_unreg,
+	.bus_qspi_dev_init = lnx_shim_bus_qspi_dev_init,
+	.bus_qspi_dev_deinit = lnx_shim_bus_qspi_dev_deinit,
+	.bus_qspi_dev_intr_reg = lnx_shim_bus_qspi_intr_reg,
+	.bus_qspi_dev_intr_unreg = lnx_shim_bus_qspi_intr_unreg,
 	.bus_qspi_dev_host_map_get = zep_shim_bus_qspi_dev_host_map_get,
 #ifdef CONFIG_NRF_WIFI_LOW_POWER
 	.timer_alloc = zep_shim_timer_alloc,
@@ -935,5 +964,5 @@ static const struct wifi_nrf_osal_ops wifi_nrf_os_linux_ops = {
 
 const struct wifi_nrf_osal_ops *get_os_ops(void)
 {
-	return &wifi_nrf_os_linux_ops;
+	return &wifi_nrf_os_lnx_ops;
 }
