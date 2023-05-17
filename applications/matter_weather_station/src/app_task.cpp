@@ -5,7 +5,7 @@
  */
 
 #include "app_task.h"
-
+#include "generic_switch.h"
 #include "battery.h"
 #include "buzzer.h"
 #include "led_widget.h"
@@ -33,6 +33,8 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
+
+#include <ei_wrapper.h>
 
 using namespace ::chip;
 using namespace ::chip::Credentials;
@@ -72,6 +74,9 @@ constexpr int16_t kMaximalOperatingVoltageMv = 4050;
 constexpr int16_t kWarningThresholdVoltageMv = 3450;
 constexpr int16_t kCriticalThresholdVoltageMv = 3250;
 constexpr uint8_t kMinBatteryPercentage = 0;
+constexpr size_t kXYZMeasurementsIntervalMs = 16;
+//constexpr size_t kXYZMeasurementsIntervalMs = 10;
+constexpr EndpointId kGenericSwitchEndpointId = 4;
 /* Value is expressed in half percent units ranging from 0 to 200. */
 constexpr uint8_t kMaxBatteryPercentage = 200;
 /* Battery capacity in uAh */
@@ -86,8 +91,18 @@ constexpr size_t kIdentifyTimerIntervalMs = 500;
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
 k_timer sMeasurementsTimer;
+k_timer sXYZMeasurementsTimer;
 k_timer sIdentifyTimer;
 FunctionTimerMode sFunctionTimerMode = FunctionTimerMode::kDisabled;
+
+enum {
+	ML_DROP_RESULT			= BIT(0),
+	ML_CLEANUP_REQUIRED		= BIT(1),
+	ML_FIRST_PREDICTION		= BIT(2),
+	ML_RUNNING			= BIT(3),
+};
+
+uint8_t ml_control;
 
 LEDWidget sRedLED;
 LEDWidget sGreenLED;
@@ -116,9 +131,143 @@ Identify sIdentifyPressure = { chip::EndpointId{ kPressureMeasurementEndpointId 
 			       AppTask::OnIdentifyStop, EMBER_ZCL_IDENTIFY_IDENTIFY_TYPE_AUDIBLE_BEEP };
 
 const device *sBme688SensorDev = DEVICE_DT_GET_ONE(bosch_bme680);
+const device *sAdxl362SensorDev = DEVICE_DT_GET_ONE(adi_adxl362);
 } /* namespace */
 
 AppTask AppTask::sAppTask;
+
+static int buf_cleanup(void)
+{
+	bool cancelled = false;
+	int err = ei_wrapper_clear_data(&cancelled);
+
+	if (!err) {
+		if (cancelled) {
+			ml_control &= ~ML_RUNNING;
+		}
+
+		if (ml_control & ML_RUNNING) {
+			ml_control |= ML_DROP_RESULT;
+		}
+
+		ml_control &= ~ML_CLEANUP_REQUIRED;
+		ml_control |= ML_FIRST_PREDICTION;
+	} else if (err == -EBUSY) {
+		//__ASSERT_NO_MSG(ml_control & ML_RUNNING);
+		LOG_ERR("Cannot cleanup buffer (err: %d)", err);
+		ml_control |= ML_DROP_RESULT;
+		ml_control |= ML_CLEANUP_REQUIRED;
+	} else {
+		LOG_ERR("Cannot cleanup buffer (err: %d)", err);
+		//report_error();
+	}
+
+	return err;
+}
+
+static void start_prediction(void)
+{
+	int err;
+	size_t window_shift;
+	size_t frame_shift;
+
+	if (ml_control & ML_RUNNING) {
+		return;
+	}
+
+	if (ml_control & ML_CLEANUP_REQUIRED) {
+		err = buf_cleanup();
+		if (err) {
+			return;
+		}
+	}
+
+	if (ml_control & ML_FIRST_PREDICTION) {
+		window_shift = 0;
+		frame_shift = 0;
+	} else {
+		//window_shift = SHIFT_WINDOWS;
+		//frame_shift = SHIFT_FRAMES;
+		window_shift = 1;
+		frame_shift = 0;
+	}
+
+	err = ei_wrapper_start_prediction(window_shift, frame_shift);
+
+	if (!err) {
+		ml_control |= ML_RUNNING;
+		ml_control &= ~ML_FIRST_PREDICTION;
+	} else {
+		LOG_ERR("Cannot start prediction (err: %d)", err);
+		//report_error();
+	}
+}
+
+void AppTask::result_ready_cb(int err)
+{
+	LOG_ERR("Result ready callback(err: %d)", err);
+
+
+	//bool drop_result = (err) || (ml_control & ML_DROP_RESULT) || (state == STATE_ERROR);
+	bool drop_result = (err) || (ml_control & ML_DROP_RESULT);
+	static int old_result = -1, new_result;
+
+	if (err) {
+		LOG_ERR("Result ready callback returned error (err: %d)", err);
+		//report_error();
+	} else {
+		ml_control &= ~ML_DROP_RESULT;
+		ml_control &= ~ML_RUNNING;
+
+		//if (state == STATE_ACTIVE) {
+			start_prediction();
+		//}
+	}
+
+	if (!drop_result) {
+		int ret;
+		const char *label;
+		float value;
+		//float prev_value;
+		size_t idx;
+		//size_t prev_idx;
+		float anomaly;
+
+		ret = ei_wrapper_get_next_classification_result(&label, &value, &idx);
+		if (!ret) {
+			if (!label) {
+				LOG_ERR("Returned label is NULL");
+				return;
+			}
+			LOG_INF("%s, %f", label, value);
+			if (strncmp(label, "Normal", 6) == 0) {
+				LOG_INF("Normal");
+				new_result = 1;
+				if (old_result == new_result) {
+					sAppTask.PostEvent(AppEvent{ AppEvent::MLResultNormal });
+				}
+			} else if (strncmp(label, "Unbala", 6) == 0) {
+				LOG_INF("Unbalance");
+				new_result = 2;
+				if (old_result == new_result) {
+					sAppTask.PostEvent(AppEvent{ AppEvent::MLResultUnbalance });
+				}
+			} else {
+				LOG_INF("Ignore result");
+				new_result = 3;
+			}
+			old_result = new_result;
+		} else {
+			ret = ei_wrapper_get_anomaly(&anomaly);
+			if (!ret) {
+				LOG_INF("anomaly:%f", anomaly);
+			} else {
+				LOG_ERR("Fail to retrieve anomaly");
+			}
+		}
+
+	}
+}
 
 CHIP_ERROR AppTask::Init()
 {
@@ -153,6 +302,8 @@ CHIP_ERROR AppTask::Init()
 		return err;
 	}
 
+	GenericSwitch::GetInstance().Init(kGenericSwitchEndpointId);
+
 	/* Initialize RGB LED */
 	LEDWidget::InitGpio();
 	LEDWidget::SetStateUpdateCallback(LEDStateUpdateHandler);
@@ -173,6 +324,18 @@ CHIP_ERROR AppTask::Init()
 	if (!device_is_ready(sBme688SensorDev)) {
 		LOG_ERR("BME688 sensor device not ready");
 		return chip::System::MapErrorZephyr(-ENODEV);
+	}
+
+	if (!device_is_ready(sAdxl362SensorDev)) {
+		LOG_ERR("ADXL362 sensor device not ready");
+		return chip::System::MapErrorZephyr(-ENODEV);
+	}
+
+	ml_control |= ML_FIRST_PREDICTION;
+	ret = ei_wrapper_init(result_ready_cb);
+	if (ret) {
+		LOG_ERR("ei_wrapper_init() failed");
+		return chip::System::MapErrorZephyr(ret);
 	}
 
 	ret = BatteryMeasurementInit();
@@ -232,6 +395,18 @@ CHIP_ERROR AppTask::Init()
 	k_timer_start(&sMeasurementsTimer, K_MSEC(kMeasurementsIntervalMs), K_MSEC(kMeasurementsIntervalMs));
 	k_timer_init(
 		&sIdentifyTimer, [](k_timer *) { sAppTask.PostEvent(AppEvent{ AppEvent::IdentifyTimer }); }, nullptr);
+	k_timer_init(
+		&sXYZMeasurementsTimer, [](k_timer *) { sAppTask.PostEvent(AppEvent{ AppEvent::XYZMeasurementsTimer }); },
+		nullptr);
+	k_timer_start(&sXYZMeasurementsTimer, K_MSEC(kXYZMeasurementsIntervalMs), K_MSEC(kXYZMeasurementsIntervalMs));
+	start_prediction();
+	/*
+	ret = ei_wrapper_start_prediction(1, 0);
+	if (ret) {
+		LOG_ERR("Buzzer init failed");
+		return chip::System::MapErrorZephyr(ret);
+	}
+	*/
 
 	/* Initialize CHIP server */
 	static chip::CommonCaseDeviceServerInitParams initParams;
@@ -317,11 +492,20 @@ void AppTask::DispatchEvent(AppEvent &event)
 	case AppEvent::MeasurementsTimer:
 		MeasurementsTimerHandler();
 		break;
+	case AppEvent::XYZMeasurementsTimer:
+		XYZMeasurementsTimerHandler();
+		break;
 	case AppEvent::IdentifyTimer:
 		IdentifyTimerHandler();
 		break;
 	case AppEvent::UpdateLedState:
 		event.UpdateLedStateEvent.LedWidget->UpdateState();
+		break;
+	case AppEvent::MLResultNormal:
+		GenericSwitch::GetInstance().GenericSwitchShortPress();
+		break;
+	case AppEvent::MLResultUnbalance:
+		GenericSwitch::GetInstance().GenericSwitchLongPress();
 		break;
 	default:
 		LOG_INF("Unknown event received");
@@ -377,6 +561,35 @@ void AppTask::FunctionTimerHandler()
 void AppTask::MeasurementsTimerHandler()
 {
 	sAppTask.UpdateClustersState();
+}
+
+void AppTask::XYZMeasurementsTimerHandler()
+{
+	//const int result = sensor_sample_fetch(sAdxl362SensorDev);
+	//struct sensor_value data[ACCELEROMETER_CHANNELS];
+	struct sensor_value data[3];
+	int ret;
+	float float_data[3];
+
+	ret = sensor_sample_fetch(sAdxl362SensorDev);
+	if (ret != 0) {
+		LOG_ERR("Fetching data from ADXL362 sensor failed with: %d", ret);
+	} else {
+		ret = sensor_channel_get(sAdxl362SensorDev, SENSOR_CHAN_ACCEL_XYZ, &data[0]);
+		if (ret) {
+			LOG_ERR("sensor_channel_get, error: %d", ret);
+		} else {
+			for (size_t i = 0; i < 3; i++) {
+				float_data[i] = sensor_value_to_double(&data[i]);
+			}
+			ret = ei_wrapper_add_data(float_data, 3);
+			if (ret) {
+				LOG_ERR("Cannot add data for EI wrapper (err %d)", ret);
+				//report_error();
+				//return false;
+			}
+		}
+	}
 }
 
 void AppTask::OnIdentifyStart(Identify *)

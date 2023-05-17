@@ -7,7 +7,7 @@
 menuconfig EDGE_IMPULSE
 	bool "Enable Edge Impulse"
 	depends on CPLUSPLUS
-	depends on STD_CPP11
+	depends on STD_CPP14
 	depends on LIB_CPLUSPLUS
 	depends on NEWLIB_LIBC
 	depends on NEWLIB_LIBC_FLOAT_PRINTF

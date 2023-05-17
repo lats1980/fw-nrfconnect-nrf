@@ -30,6 +30,7 @@ void MatterNetworkCommissioningPluginServerInitCallback();
 void MatterGeneralDiagnosticsPluginServerInitCallback();
 void MatterSoftwareDiagnosticsPluginServerInitCallback();
 void MatterThreadNetworkDiagnosticsPluginServerInitCallback();
+void MatterSwitchPluginServerInitCallback();
 void MatterAdministratorCommissioningPluginServerInitCallback();
 void MatterOperationalCredentialsPluginServerInitCallback();
 void MatterGroupKeyManagementPluginServerInitCallback();
@@ -49,6 +50,7 @@ void MatterRelativeHumidityMeasurementPluginServerInitCallback();
 	MatterGeneralDiagnosticsPluginServerInitCallback();                                                            \
 	MatterSoftwareDiagnosticsPluginServerInitCallback();                                                           \
 	MatterThreadNetworkDiagnosticsPluginServerInitCallback();                                                      \
+	MatterSwitchPluginServerInitCallback();                                                                        \
 	MatterAdministratorCommissioningPluginServerInitCallback();                                                    \
 	MatterOperationalCredentialsPluginServerInitCallback();                                                        \
 	MatterGroupKeyManagementPluginServerInitCallback();                                                            \

@@ -16,6 +16,9 @@ struct AppEvent {
 		FunctionRelease,
 		FunctionTimer,
 		MeasurementsTimer,
+		XYZMeasurementsTimer,
+		MLResultNormal,
+		MLResultUnbalance,
 		IdentifyTimer,
 	};
 

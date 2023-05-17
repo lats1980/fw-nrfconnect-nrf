@@ -36,7 +36,13 @@ server cluster Identify = 3 {
     INT16U identifyTime = 0;
   }
 
+  request struct TriggerEffectRequest {
+    IdentifyEffectIdentifier effectIdentifier = 0;
+    IdentifyEffectVariant effectVariant = 1;
+  }
+
   command access(invoke: manage) Identify(IdentifyRequest): DefaultSuccess = 0;
+  command access(invoke: manage) TriggerEffect(TriggerEffectRequest): DefaultSuccess = 64;
 }
 
 server cluster Descriptor = 29 {
@@ -862,6 +868,54 @@ server cluster ThreadNetworkDiagnostics = 53 {
   command ResetCounts(): DefaultSuccess = 0;
 }
 
+server cluster Switch = 59 {
+  bitmap SwitchFeature : BITMAP32 {
+    kLatchingSwitch = 0x1;
+    kMomentarySwitch = 0x2;
+    kMomentarySwitchRelease = 0x4;
+    kMomentarySwitchLongPress = 0x8;
+    kMomentarySwitchMultiPress = 0x10;
+  }
+
+  info event SwitchLatched = 0 {
+    INT8U newPosition = 0;
+  }
+
+  info event InitialPress = 1 {
+    INT8U newPosition = 0;
+  }
+
+  info event LongPress = 2 {
+    INT8U newPosition = 0;
+  }
+
+  info event ShortRelease = 3 {
+    INT8U previousPosition = 0;
+  }
+
+  info event LongRelease = 4 {
+    INT8U previousPosition = 0;
+  }
+
+  info event MultiPressOngoing = 5 {
+    INT8U newPosition = 0;
+    INT8U currentNumberOfPressesCounted = 1;
+  }
+
+  info event MultiPressComplete = 6 {
+    INT8U previousPosition = 0;
+    INT8U totalNumberOfPressesCounted = 1;
+  }
+
+  readonly attribute int8u numberOfPositions = 0;
+  readonly attribute int8u currentPosition = 1;
+  readonly attribute command_id generatedCommandList[] = 65528;
+  readonly attribute command_id acceptedCommandList[] = 65529;
+  readonly attribute attrib_id attributeList[] = 65531;
+  readonly attribute bitmap32 featureMap = 65532;
+  readonly attribute int16u clusterRevision = 65533;
+}
+
 server cluster AdministratorCommissioning = 60 {
   enum CommissioningWindowStatus : ENUM8 {
     kWindowNotOpen = 0;
@@ -1468,6 +1522,41 @@ endpoint 3 {
     callback attribute attributeList;
     ram      attribute featureMap;
     ram      attribute clusterRevision default = 3;
+  }
+}
+endpoint 4 {
+  device type anonymousEndpointType = 15, version 1;
+
+  server cluster Identify {
+    ram      attribute identifyTime;
+    ram      attribute identifyType;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap;
+    ram      attribute clusterRevision default = 4;
+  }
+
+  server cluster Descriptor {
+    callback attribute deviceTypeList;
+    callback attribute serverList;
+    callback attribute clientList;
+    callback attribute partsList;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap;
+    ram      attribute clusterRevision default = 1;
+  }
+
+  server cluster Switch {
+    ram      attribute numberOfPositions default = 2;
+    ram      attribute currentPosition;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap default = 14;
+    ram      attribute clusterRevision default = 1;
   }
 }
 

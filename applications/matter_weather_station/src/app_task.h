@@ -48,10 +48,12 @@ private:
 	static void ButtonReleaseHandler();
 	static void FunctionTimerHandler();
 	static void MeasurementsTimerHandler();
+	static void XYZMeasurementsTimerHandler();
 	static void IdentifyTimerHandler();
 	static void UpdateStatusLED();
 	static void LEDStateUpdateHandler(LEDWidget &ledWidget);
 	static void ChipEventHandler(const chip::DeviceLayer::ChipDeviceEvent *event, intptr_t arg);
+	static void result_ready_cb(int err);
 
 	static AppTask sAppTask;
 
