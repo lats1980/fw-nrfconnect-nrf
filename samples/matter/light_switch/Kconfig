@@ -17,15 +17,15 @@ config STATE_LEDS
 if NET_L2_OPENTHREAD
 
 choice OPENTHREAD_NORDIC_LIBRARY_CONFIGURATION
-	default OPENTHREAD_NORDIC_LIBRARY_MTD
+	default OPENTHREAD_NORDIC_LIBRARY_FTD
 endchoice
 
 choice OPENTHREAD_DEVICE_TYPE
-	default OPENTHREAD_MTD
+	default OPENTHREAD_FTD
 endchoice
 
 config CHIP_ENABLE_SLEEPY_END_DEVICE_SUPPORT
-	default y
+	default n
 
 # Reduce Thread TX output power to 0 dBm for SED device
 config OPENTHREAD_DEFAULT_TX_POWER

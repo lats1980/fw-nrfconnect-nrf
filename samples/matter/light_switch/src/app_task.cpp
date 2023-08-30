@@ -128,11 +128,7 @@ CHIP_ERROR AppTask::Init()
 		return err;
 	}
 
-#ifdef CONFIG_OPENTHREAD_MTD_SED
-	err = ConnectivityMgr().SetThreadDeviceType(ConnectivityManager::kThreadDeviceType_SleepyEndDevice);
-#else
-	err = ConnectivityMgr().SetThreadDeviceType(ConnectivityManager::kThreadDeviceType_MinimalEndDevice);
-#endif /* CONFIG_OPENTHREAD_MTD_SED */
+	err = ConnectivityMgr().SetThreadDeviceType(ConnectivityManager::kThreadDeviceType_Router);
 	if (err != CHIP_NO_ERROR) {
 		LOG_ERR("ConnectivityMgr().SetThreadDeviceType() failed: %s", ErrorStr(err));
 		return err;
