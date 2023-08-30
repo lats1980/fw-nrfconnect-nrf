@@ -10,6 +10,10 @@
 #include "led_util.h"
 #include "light_switch.h"
 
+#ifdef CONFIG_CHIP_NUS
+#include "bt_nus_service.h"
+#endif
+
 #include <platform/CHIPDeviceLayer.h>
 
 #include "board_util.h"
@@ -58,6 +62,11 @@ constexpr size_t kAppEventQueueSize = 10;
 constexpr EndpointId kLightSwitchEndpointId = 1;
 constexpr EndpointId kLightEndpointId = 1;
 
+#ifdef CONFIG_CHIP_NUS
+constexpr uint16_t kAdvertisingIntervalMin = 400;
+constexpr uint16_t kAdvertisingIntervalMax = 500;
+constexpr uint8_t kSwitchNUSPriority = 2;
+#endif
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
 k_timer sDimmerPressKeyTimer;
@@ -170,6 +179,18 @@ CHIP_ERROR AppTask::Init()
 	/* Initialize DFU over SMP */
 	GetDFUOverSMP().Init();
 	GetDFUOverSMP().ConfirmNewImage();
+#endif
+
+#ifdef CONFIG_CHIP_NUS
+	/* Initialize Nordic UART Service for Switch purposes */
+	if (!GetNUSService().Init(kSwitchNUSPriority, kAdvertisingIntervalMin, kAdvertisingIntervalMax)) {
+		ChipLogError(Zcl, "Cannot initialize NUS service");
+	}
+	//GetNUSService().RegisterCommand("Lock", sizeof("Lock"), NUSLockCallback, nullptr);
+	//GetNUSService().RegisterCommand("Unlock", sizeof("Unlock"), NUSUnlockCallback, nullptr);
+	if(!GetNUSService().StartServer()){
+		LOG_ERR("GetNUSService().StartServer() failed");
+	}
 #endif
 
 	/* Initialize CHIP server */
