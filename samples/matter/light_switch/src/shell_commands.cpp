@@ -66,7 +66,10 @@ namespace Unicast
 	static CHIP_ERROR OnCommandHandler(int argc, char **argv)
 	{
 		BindingHandler::BindingData *data = Platform::New<BindingHandler::BindingData>();
-		data->EndpointId = LightSwitch::GetInstance().GetLightSwitchEndpointId();
+		if (argc == 0) {
+			return CHIP_ERROR_INVALID_ARGUMENT;
+		}
+		data->EndpointId = atoi(argv[0]);
 		data->CommandId = Clusters::OnOff::Commands::On::Id;
 		data->ClusterId = Clusters::OnOff::Id;
 
@@ -78,7 +81,10 @@ namespace Unicast
 	static CHIP_ERROR OffCommandHandler(int argc, char **argv)
 	{
 		BindingHandler::BindingData *data = Platform::New<BindingHandler::BindingData>();
-		data->EndpointId = LightSwitch::GetInstance().GetLightSwitchEndpointId();
+		if (argc == 0) {
+			return CHIP_ERROR_INVALID_ARGUMENT;
+		}
+		data->EndpointId = atoi(argv[0]);
 		data->CommandId = Clusters::OnOff::Commands::Off::Id;
 		data->ClusterId = Clusters::OnOff::Id;
 
@@ -90,7 +96,10 @@ namespace Unicast
 	static CHIP_ERROR ToggleCommandHandler(int argc, char **argv)
 	{
 		BindingHandler::BindingData *data = Platform::New<BindingHandler::BindingData>();
-		data->EndpointId = LightSwitch::GetInstance().GetLightSwitchEndpointId();
+		if (argc == 0) {
+			return CHIP_ERROR_INVALID_ARGUMENT;
+		}
+		data->EndpointId = atoi(argv[0]);
 		data->CommandId = Clusters::OnOff::Commands::Toggle::Id;
 		data->ClusterId = Clusters::OnOff::Id;
 
@@ -135,7 +144,10 @@ namespace Group
 	CHIP_ERROR OnCommandHandler(int argc, char **argv)
 	{
 		BindingHandler::BindingData *data = Platform::New<BindingHandler::BindingData>();
-		data->EndpointId = LightSwitch::GetInstance().GetLightSwitchEndpointId();
+		if (argc == 0) {
+			return CHIP_ERROR_INVALID_ARGUMENT;
+		}
+		data->EndpointId = atoi(argv[0]);
 		data->CommandId = Clusters::OnOff::Commands::On::Id;
 		data->ClusterId = Clusters::OnOff::Id;
 		data->IsGroup = true;
@@ -148,7 +160,10 @@ namespace Group
 	CHIP_ERROR OffCommandHandler(int argc, char **argv)
 	{
 		BindingHandler::BindingData *data = Platform::New<BindingHandler::BindingData>();
-		data->EndpointId = LightSwitch::GetInstance().GetLightSwitchEndpointId();
+		if (argc == 0) {
+			return CHIP_ERROR_INVALID_ARGUMENT;
+		}
+		data->EndpointId = atoi(argv[0]);
 		data->CommandId = Clusters::OnOff::Commands::Off::Id;
 		data->ClusterId = Clusters::OnOff::Id;
 		data->IsGroup = true;
@@ -161,7 +176,10 @@ namespace Group
 	CHIP_ERROR ToggleCommandHandler(int argc, char **argv)
 	{
 		BindingHandler::BindingData *data = Platform::New<BindingHandler::BindingData>();
-		data->EndpointId = LightSwitch::GetInstance().GetLightSwitchEndpointId();
+		if (argc == 0) {
+			return CHIP_ERROR_INVALID_ARGUMENT;
+		}
+		data->EndpointId = atoi(argv[0]);
 		data->CommandId = Clusters::OnOff::Commands::Toggle::Id;
 		data->ClusterId = Clusters::OnOff::Id;
 		data->IsGroup = true;
