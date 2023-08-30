@@ -31,6 +31,7 @@ namespace chip
 {
 namespace Controller
 {
+
 	class DLL_EXPORT IdentifyCluster : public ClusterBase {
 	public:
 		IdentifyCluster(Messaging::ExchangeManager &exchangeManager, const SessionHandle &session,
@@ -39,16 +40,6 @@ namespace Controller
 		{
 		}
 		~IdentifyCluster() {}
-	};
-
-	class DLL_EXPORT ScenesCluster : public ClusterBase {
-	public:
-		ScenesCluster(Messaging::ExchangeManager &exchangeManager, const SessionHandle &session,
-			      EndpointId endpoint)
-			: ClusterBase(exchangeManager, session, endpoint)
-		{
-		}
-		~ScenesCluster() {}
 	};
 
 	class DLL_EXPORT OnOffCluster : public ClusterBase {

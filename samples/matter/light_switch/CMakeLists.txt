@@ -45,6 +45,7 @@ target_sources(app PRIVATE
     src/app_task.cpp
     src/light_switch.cpp
     src/main.cpp
+src/zcl_callbacks.cpp
     src/binding_handler.cpp
     src/shell_commands.cpp
     ${COMMON_ROOT}/src/led_widget.cpp
