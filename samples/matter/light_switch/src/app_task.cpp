@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "led_util.h"
 #include "light_switch.h"
+#include "pwm_device.h"
 
 #ifdef CONFIG_CHIP_NUS
 #include "bt_nus_service.h"
@@ -17,9 +18,11 @@
 #include <platform/CHIPDeviceLayer.h>
 
 #include "board_util.h"
+#include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/clusters/identify-server/identify-server.h>
 #include <app/server/OnboardingCodesUtil.h>
 #include <app/server/Server.h>
+#include <app/DeferredAttributePersistenceProvider.h>
 #include <credentials/DeviceAttestationCredsProvider.h>
 #include <credentials/examples/DeviceAttestationCredsExample.h>
 #include <lib/support/CHIPMem.h>
@@ -61,6 +64,8 @@ constexpr uint32_t kDimmerInterval = 300;
 constexpr size_t kAppEventQueueSize = 10;
 constexpr EndpointId kLightSwitchEndpointId = 1;
 constexpr EndpointId kLightEndpointId = 1;
+constexpr uint8_t kDefaultMinLevel = 0;
+constexpr uint8_t kDefaultMaxLevel = 254;
 
 #ifdef CONFIG_CHIP_NUS
 constexpr uint16_t kAdvertisingIntervalMin = 400;
@@ -85,6 +90,20 @@ bool sIsNetworkProvisioned = false;
 bool sIsNetworkEnabled = false;
 bool sHaveBLEConnections = false;
 bool sWasDimmerTriggered = false;
+
+const struct pwm_dt_spec sLightPwmDevice = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led1));
+
+// Define a custom attribute persister which makes actual write of the CurrentLevel attribute value
+// to the non-volatile storage only when it has remained constant for 5 seconds. This is to reduce
+// the flash wearout when the attribute changes frequently as a result of MoveToLevel command.
+// DeferredAttribute object describes a deferred attribute, but also holds a buffer with a value to
+// be written, so it must live so long as the DeferredAttributePersistenceProvider object.
+DeferredAttribute gCurrentLevelPersister(ConcreteAttributePath(kLightEndpointId, Clusters::LevelControl::Id,
+							       Clusters::LevelControl::Attributes::CurrentLevel::Id));
+DeferredAttributePersistenceProvider gDeferredAttributePersister(Server::GetInstance().GetDefaultAttributePersister(),
+								 Span<DeferredAttribute>(&gCurrentLevelPersister, 1),
+								 System::Clock::Milliseconds32(5000));
+
 } /* namespace */
 
 namespace LedConsts
@@ -181,6 +200,19 @@ CHIP_ERROR AppTask::Init()
 	GetDFUOverSMP().ConfirmNewImage();
 #endif
 
+	/* Initialize lighting device (PWM) */
+	uint8_t minLightLevel = kDefaultMinLevel;
+	Clusters::LevelControl::Attributes::MinLevel::Get(kLightEndpointId, &minLightLevel);
+
+	uint8_t maxLightLevel = kDefaultMaxLevel;
+	Clusters::LevelControl::Attributes::MaxLevel::Get(kLightEndpointId, &maxLightLevel);
+
+	ret = mPWMDevice.Init(&sLightPwmDevice, minLightLevel, maxLightLevel, maxLightLevel);
+	if (ret != 0) {
+		return chip::System::MapErrorZephyr(ret);
+	}
+	mPWMDevice.SetCallbacks(ActionInitiated, ActionCompleted);
+
 #ifdef CONFIG_CHIP_NUS
 	/* Initialize Nordic UART Service for Switch purposes */
 	if (!GetNUSService().Init(kSwitchNUSPriority, kAdvertisingIntervalMin, kAdvertisingIntervalMax)) {
@@ -208,6 +240,7 @@ CHIP_ERROR AppTask::Init()
 	(void)initParams.InitializeStaticResourcesBeforeServerInit();
 
 	ReturnErrorOnFailure(chip::Server::GetInstance().Init(initParams));
+app::SetAttributePersistenceProvider(&gDeferredAttributePersister);
 	ConfigurationMgr().LogDeviceConfig();
 	PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
 
@@ -245,6 +278,25 @@ CHIP_ERROR AppTask::StartApp()
 	return CHIP_NO_ERROR;
 }
 
+void AppTask::LightingActionEventHandler(const AppEvent &event)
+{
+	PWMDevice::Action_t action = PWMDevice::INVALID_ACTION;
+	int32_t actor = 0;
+
+	if (event.Type == AppEventType::Lighting) {
+		action = static_cast<PWMDevice::Action_t>(event.LightingEvent.Action);
+		actor = event.LightingEvent.Actor;
+	} else if (event.Type == AppEventType::Button) {
+		action = Instance().mPWMDevice.IsTurnedOn() ? PWMDevice::OFF_ACTION : PWMDevice::ON_ACTION;
+		actor = static_cast<int32_t>(AppEventType::Button);
+	}
+
+	if (action != PWMDevice::INVALID_ACTION && Instance().mPWMDevice.InitiateAction(action, actor, NULL)) {
+		LOG_INF("Action is already in progress or active.");
+	}
+}
+
+
 void AppTask::ButtonPushHandler(const AppEvent &event)
 {
 	if (event.Type == AppEventType::Button) {
@@ -274,6 +326,7 @@ void AppTask::ButtonPushHandler(const AppEvent &event)
 
 void AppTask::ButtonReleaseHandler(const AppEvent &event)
 {
+	AppEvent button_event;
 	if (event.Type == AppEventType::Button) {
 		switch (event.ButtonEvent.PinNo) {
 		case FUNCTION_BUTTON:
@@ -316,6 +369,12 @@ void AppTask::ButtonReleaseHandler(const AppEvent &event)
 			Instance().CancelTimer(Timer::Dimmer);
 			Instance().CancelTimer(Timer::DimmerTrigger);
 			sWasDimmerTriggered = false;
+
+			button_event.Type = AppEventType::Button;
+			button_event.ButtonEvent.PinNo = DK_BTN2;
+			button_event.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
+			button_event.Handler = LightingActionEventHandler;
+			PostEvent(button_event);
 			break;
 		default:
 			break;
@@ -570,6 +629,32 @@ void AppTask::UpdateLedStateEventHandler(const AppEvent &event)
 	}
 }
 
+void AppTask::ActionInitiated(PWMDevice::Action_t action, int32_t actor)
+{
+	if (action == PWMDevice::ON_ACTION) {
+		LOG_INF("Turn On Action has been initiated");
+	} else if (action == PWMDevice::OFF_ACTION) {
+		LOG_INF("Turn Off Action has been initiated");
+	} else if (action == PWMDevice::LEVEL_ACTION) {
+		LOG_INF("Level Action has been initiated");
+	}
+}
+
+void AppTask::ActionCompleted(PWMDevice::Action_t action, int32_t actor)
+{
+	if (action == PWMDevice::ON_ACTION) {
+		LOG_INF("Turn On Action has been completed");
+	} else if (action == PWMDevice::OFF_ACTION) {
+		LOG_INF("Turn Off Action has been completed");
+	} else if (action == PWMDevice::LEVEL_ACTION) {
+		LOG_INF("Level Action has been completed");
+	}
+
+	if (actor == static_cast<int32_t>(AppEventType::Button)) {
+		Instance().UpdateClusterState();
+	}
+}
+
 void AppTask::BindingChangedEventHandler(const AppEvent &event)
 {
 	LightSwitch::GetInstance().SubscribeAttribute();
@@ -628,4 +713,24 @@ void AppTask::DispatchEvent(const AppEvent &event)
 	} else {
 		LOG_INF("Event received with no handler. Dropping event.");
 	}
+}
+
+void AppTask::UpdateClusterState()
+{
+	SystemLayer().ScheduleLambda([this] {
+		/* write the new on/off value */
+		EmberAfStatus status =
+			Clusters::OnOff::Attributes::OnOff::Set(kLightEndpointId, mPWMDevice.IsTurnedOn());
+
+		if (status != EMBER_ZCL_STATUS_SUCCESS) {
+			LOG_ERR("Updating on/off cluster failed: %x", status);
+		}
+
+		/* write the current level */
+		status = Clusters::LevelControl::Attributes::CurrentLevel::Set(kLightEndpointId, mPWMDevice.GetLevel());
+
+		if (status != EMBER_ZCL_STATUS_SUCCESS) {
+			LOG_ERR("Updating level cluster failed: %x", status);
+		}
+	});
 }

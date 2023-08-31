@@ -8,6 +8,7 @@
 
 #include "app_event.h"
 #include "led_widget.h"
+#include "pwm_device.h"
 
 #include <platform/CHIPDeviceLayer.h>
 
@@ -39,6 +40,7 @@ public:
 	CHIP_ERROR StartApp();
 
 	void UpdateClusterState();
+PWMDevice &GetPWMDevice() { return mPWMDevice; }
 
 	static void IdentifyStartHandler(Identify *);
 	static void IdentifyStopHandler(Identify *);
@@ -57,6 +59,7 @@ private:
 	static void ButtonPushHandler(const AppEvent &event);
 	static void ButtonReleaseHandler(const AppEvent &event);
 	static void TimerEventHandler(const AppEvent &event);
+	static void LightingActionEventHandler(const AppEvent &event);
 	static void StartBLEAdvertisementHandler(const AppEvent &event);
 	static void UpdateLedStateEventHandler(const AppEvent &event);
 static void BindingChangedEventHandler(const AppEvent &event);
@@ -65,13 +68,16 @@ static void BindingChangedEventHandler(const AppEvent &event);
 	static void ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged);
 	static void LEDStateUpdateHandler(LEDWidget &ledWidget);
 	static void FunctionTimerTimeoutCallback(k_timer *timer);
+
+	static void ActionInitiated(PWMDevice::Action_t action, int32_t actor);
+	static void ActionCompleted(PWMDevice::Action_t action, int32_t actor);
 	static void UpdateStatusLED();
 
 	static void StartTimer(Timer, uint32_t);
 	static void CancelTimer(Timer);
 
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
-
+	PWMDevice mPWMDevice;
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
 #endif

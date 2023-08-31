@@ -49,6 +49,7 @@ src/zcl_callbacks.cpp
     src/binding_handler.cpp
     src/shell_commands.cpp
     ${COMMON_ROOT}/src/led_widget.cpp
+    ${COMMON_ROOT}/src/pwm_device.cpp
     src/zap-generated/IMClusterCommandHandler.cpp
     src/zap-generated/callback-stub.cpp
 )

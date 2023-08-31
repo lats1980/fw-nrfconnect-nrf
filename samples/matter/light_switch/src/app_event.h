@@ -19,6 +19,7 @@ enum class AppEventType : uint8_t {
 	ButtonReleased,
 	Timer,
 	UpdateLedState,
+	Lighting,
 	IdentifyStart,
 	IdentifyStop,
 	BindingChanged,
@@ -36,6 +37,10 @@ struct AppEvent {
 			uint8_t TimerType;
 			void *Context;
 		} TimerEvent;
+struct {
+			uint8_t Action;
+			int32_t Actor;
+		} LightingEvent;
 		struct {
 			LEDWidget *LedWidget;
 		} UpdateLedStateEvent;
