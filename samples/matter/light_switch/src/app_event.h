@@ -21,6 +21,7 @@ enum class AppEventType : uint8_t {
 	UpdateLedState,
 	IdentifyStart,
 	IdentifyStop,
+	BindingChanged,
 };
 
 enum class FunctionEvent : uint8_t { NoneSelected = 0, SoftwareUpdate = 0, FactoryReset };

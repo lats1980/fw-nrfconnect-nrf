@@ -444,6 +444,15 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 #endif
 		UpdateStatusLED();
 		break;
+case DeviceEventType::kBindingsChangedViaCluster:
+		{
+			AppEvent bindingEvent;
+
+			bindingEvent.Type = AppEventType::BindingChanged;
+			bindingEvent.Handler = AppTask::BindingChangedEventHandler;
+			PostEvent(bindingEvent);
+		}
+		break;
 	default:
 		break;
 	}
@@ -559,6 +568,11 @@ void AppTask::UpdateLedStateEventHandler(const AppEvent &event)
 	if (event.Type == AppEventType::UpdateLedState) {
 		event.UpdateLedStateEvent.LedWidget->UpdateState();
 	}
+}
+
+void AppTask::BindingChangedEventHandler(const AppEvent &event)
+{
+	LightSwitch::GetInstance().SubscribeAttribute();
 }
 
 void AppTask::LEDStateUpdateHandler(LEDWidget &aLedWidget)

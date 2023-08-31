@@ -66,3 +66,60 @@ void LightSwitch::DimmerChangeBrightness()
 							reinterpret_cast<intptr_t>(data));
 	}
 }
+
+void LightSwitch::OnDeviceConnectedFn(void * context, Messaging::ExchangeManager & exchangeMgr,
+                                         const SessionHandle & sessionHandle)
+{
+	CHIP_ERROR ret = CHIP_NO_ERROR;
+
+    auto onSuccessCb = [](const app::ConcreteDataAttributePath & attributePath, const auto & dataResponse) {
+		ChipLogProgress(NotSpecified, "Update attribute succeeded");
+		if (dataResponse == true) {
+			ChipLogError(NotSpecified, "Update attribte: on");
+		} else {
+			ChipLogError(NotSpecified, "Update attribte: off");
+		}
+    };
+
+    auto onFailureCb = [](const app::ConcreteDataAttributePath * attributePath, CHIP_ERROR error) {
+		ChipLogError(NotSpecified, "Update attribute failed: %" CHIP_ERROR_FORMAT, error.Format());
+    };
+    auto onSubscriptionEstablishedCb = [](const app::ReadClient & readClient, chip::SubscriptionId aSubscriptionId) {
+        ChipLogError(NotSpecified, "SubscribeAttribute command onSubscriptionEstablishedCb");
+    };
+
+	ret = Controller::SubscribeAttribute<Clusters::OnOff::Attributes::OnOff::TypeInfo>(& exchangeMgr,
+							sessionHandle, 1, onSuccessCb, onFailureCb,
+							0, 20, onSubscriptionEstablishedCb, nullptr, false, true);
+	if (CHIP_NO_ERROR != ret) {
+		ChipLogError(NotSpecified, "Subscribe Command Request ERROR: %s", ErrorStr(ret));
+	}
+}
+
+void LightSwitch::OnDeviceConnectionFailureFn(void * context, const ScopedNodeId & peerId, CHIP_ERROR err)
+{
+	ChipLogError(NotSpecified, "OnDeviceConnectionFailureFn");
+}
+
+void LightSwitch::SubscribeAttribute(void)
+{
+	BindingTable &bindingTable = BindingTable::GetInstance();
+	chip::Server *server = &(chip::Server::GetInstance());
+
+	ChipLogError(NotSpecified, "BindingChangedEventHandler");
+	uint8_t i = 0;
+	for (auto &entry : bindingTable) {
+		switch (entry.type) {
+		case EMBER_UNICAST_BINDING:
+			server->GetCASESessionManager()->FindOrEstablishSession(ScopedNodeId(entry.nodeId, entry.fabricIndex),
+                                                            &mOnDeviceConnectedCallback, nullptr);
+			break;
+		case EMBER_MULTICAST_BINDING:
+			break;
+		case EMBER_UNUSED_BINDING:
+			break;
+		default:
+			break;
+		}
+	}
+}
