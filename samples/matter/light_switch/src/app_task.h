@@ -60,7 +60,6 @@ private:
 	static void ButtonReleaseHandler(const AppEvent &event);
 	static void TimerEventHandler(const AppEvent &event);
 	static void LightingActionEventHandler(const AppEvent &event);
-	static void StartBLEAdvertisementHandler(const AppEvent &event);
 	static void UpdateLedStateEventHandler(const AppEvent &event);
 static void BindingChangedEventHandler(const AppEvent &event);
 

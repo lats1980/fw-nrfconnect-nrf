@@ -445,23 +445,6 @@ void AppTask::IdentifyStopHandler(Identify *)
 	PostEvent(event);
 }
 
-void AppTask::StartBLEAdvertisementHandler(const AppEvent &)
-{
-	if (Server::GetInstance().GetFabricTable().FabricCount() != 0) {
-		LOG_INF("Matter service BLE advertising not started - device is already commissioned");
-		return;
-	}
-
-	if (ConnectivityMgr().IsBLEAdvertisingEnabled()) {
-		LOG_INF("BLE advertising is already enabled");
-		return;
-	}
-
-	if (Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow() != CHIP_NO_ERROR) {
-		LOG_ERR("OpenBasicCommissioningWindow() failed");
-	}
-}
-
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
 	switch (event->Type) {
@@ -577,15 +560,6 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 		buttonEvent.Handler = ButtonReleaseHandler;
 		PostEvent(buttonEvent);
 	}
-
-#if NUMBER_OF_BUTTONS == 4
-	if (BLE_ADVERTISEMENT_START_BUTTON_MASK & hasChanged & buttonState) {
-		buttonEvent.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_BUTTON;
-		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
-		buttonEvent.Handler = StartBLEAdvertisementHandler;
-		PostEvent(buttonEvent);
-	}
-#endif
 }
 
 void AppTask::StartTimer(Timer timer, uint32_t timeoutMs)
