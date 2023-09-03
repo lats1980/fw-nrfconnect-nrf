@@ -27,7 +27,7 @@ public:
 		On, /* Turn on light on lighting-app device */
 		Off /* Turn off light on lighting-app device */
 	};
-LightSwitch() :
+	LightSwitch() :
 		mOnDeviceConnectedCallback(OnDeviceConnectedFn, this),
 		mOnDeviceConnectionFailureCallback(OnDeviceConnectionFailureFn, this) {};
 
@@ -35,7 +35,7 @@ LightSwitch() :
 	void InitiateActionSwitch(Action);
 	void DimmerChangeBrightness();
 	chip::EndpointId GetLightSwitchEndpointId() { return mLightSwitchEndpoint; }
-void SubscribeAttribute();
+	void SubscribeAttribute();
 
 	static LightSwitch &GetInstance()
 	{

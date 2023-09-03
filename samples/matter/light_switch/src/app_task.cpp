@@ -240,7 +240,7 @@ CHIP_ERROR AppTask::Init()
 	(void)initParams.InitializeStaticResourcesBeforeServerInit();
 
 	ReturnErrorOnFailure(chip::Server::GetInstance().Init(initParams));
-app::SetAttributePersistenceProvider(&gDeferredAttributePersister);
+	app::SetAttributePersistenceProvider(&gDeferredAttributePersister);
 	ConfigurationMgr().LogDeviceConfig();
 	PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
 
@@ -486,7 +486,8 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 #endif
 		UpdateStatusLED();
 		break;
-case DeviceEventType::kBindingsChangedViaCluster:
+	case DeviceEventType::kBindingsChangedViaCluster:
+	case DeviceEventType::kServerReady:
 		{
 			AppEvent bindingEvent;
 
