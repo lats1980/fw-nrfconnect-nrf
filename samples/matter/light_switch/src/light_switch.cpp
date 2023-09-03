@@ -148,6 +148,7 @@ void LightSwitch::SubscribeAttribute(void)
 			ChipLogError(NotSpecified, "SubscribeAttribute: Connect to %d", (int)entry.nodeId);
 			server->GetCASESessionManager()->FindOrEstablishSession(ScopedNodeId(entry.nodeId, entry.fabricIndex),
                                                             &mOnDeviceConnectedCallback, &mOnDeviceConnectionFailureCallback);
+			k_sleep(K_MSEC(1000));
 			break;
 		case EMBER_MULTICAST_BINDING:
 			break;
