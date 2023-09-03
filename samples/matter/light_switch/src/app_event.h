@@ -37,7 +37,7 @@ struct AppEvent {
 			uint8_t TimerType;
 			void *Context;
 		} TimerEvent;
-struct {
+		struct {
 			uint8_t Action;
 			int32_t Actor;
 		} LightingEvent;
