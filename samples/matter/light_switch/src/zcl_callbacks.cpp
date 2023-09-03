@@ -7,6 +7,7 @@
 #include <lib/support/logging/CHIPLogging.h>
 
 #include "app_task.h"
+#include "light_switch.h"
 
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app-common/zap-generated/ids/Attributes.h>
@@ -22,6 +23,12 @@ void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &a
 {
 	ClusterId clusterId = attributePath.mClusterId;
 	AttributeId attributeId = attributePath.mAttributeId;
+	EndpointId endpointId = attributePath.mEndpointId;
+
+	ChipLogProgress(Zcl, "Endpoint ID: %" PRIu8 "", endpointId);
+	if (LightSwitch::GetInstance().GetLightSwitchEndpointId() != endpointId) {
+		return;
+	}
 
 	if (clusterId == OnOff::Id && attributeId == OnOff::Attributes::OnOff::Id) {
 		ChipLogProgress(Zcl, "Cluster OnOff: attribute OnOff set to %" PRIu8 "", *value);
