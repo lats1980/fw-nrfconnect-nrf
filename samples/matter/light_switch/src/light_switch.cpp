@@ -21,10 +21,10 @@
 using namespace chip;
 using namespace chip::app;
 
-void LightSwitch::Init(chip::EndpointId aLightSwitchEndpoint)
+void LightSwitch::Init(chip::EndpointId aLightSwitchEndpoint, uint32_t aGpioPin)
 {
-	BindingHandler::GetInstance().Init();
 	mLightSwitchEndpoint = aLightSwitchEndpoint;
+	mGpioPin = aGpioPin;
 }
 
 void LightSwitch::InitiateActionSwitch(Action mAction)

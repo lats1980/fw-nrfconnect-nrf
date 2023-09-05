@@ -18,6 +18,7 @@ public:
 	static void SetStateUpdateCallback(LEDWidgetStateUpdateHandler stateUpdateCb);
 	void Init(uint32_t gpioNum);
 	void Set(bool state);
+	bool Get() { return mState; };
 	void Invert();
 	void Blink(uint32_t changeRateMS);
 	void Blink(uint32_t onTimeMS, uint32_t offTimeMS);

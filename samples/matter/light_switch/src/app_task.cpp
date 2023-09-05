@@ -10,6 +10,7 @@
 #include "led_util.h"
 #include "light_switch.h"
 #include "pwm_device.h"
+#include "binding_handler.h"
 
 #ifdef CONFIG_CHIP_NUS
 #include "bt_nus_service.h"
@@ -62,7 +63,12 @@ constexpr uint32_t kFactoryResetCancelWindowTimeout = 3000;
 constexpr uint32_t kDimmerTriggeredTimeout = 500;
 constexpr uint32_t kDimmerInterval = 300;
 constexpr size_t kAppEventQueueSize = 10;
-constexpr EndpointId kLightSwitchEndpointId = 1;
+constexpr EndpointId kDimmerSwitchEndpointId_1 = 1;
+constexpr EndpointId kDimmerSwitchEndpointId_2 = 2;
+constexpr EndpointId kOnOffSwitchEndpointId_1 = 3;
+constexpr EndpointId kOnOffSwitchEndpointId_2 = 4;
+constexpr EndpointId kSpareSwitchEndpointId_1 = 5;
+constexpr EndpointId kSpareSwitchEndpointId_2 = 6;
 constexpr EndpointId kLightEndpointId = 1;
 constexpr uint8_t kDefaultMinLevel = 0;
 constexpr uint8_t kDefaultMaxLevel = 254;
@@ -82,6 +88,7 @@ Identify sIdentify = { kLightEndpointId, AppTask::IdentifyStartHandler, AppTask:
 
 LEDWidget sStatusLED;
 LEDWidget sIdentifyLED;
+LEDWidget sOnOffLED_1;
 #if NUMBER_OF_LEDS == 4
 FactoryResetLEDsWrapper<2> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED, FACTORY_RESET_SIGNAL_LED1 } };
 #endif
@@ -168,7 +175,13 @@ CHIP_ERROR AppTask::Init()
 	return CHIP_ERROR_INTERNAL;
 #endif /* CONFIG_NET_L2_OPENTHREAD */
 
-	LightSwitch::GetInstance().Init(kLightSwitchEndpointId);
+	mSwitch[0].Init(kDimmerSwitchEndpointId_1, DIMMER_SWITCH_BUTTON_1);
+	mSwitch[1].Init(kDimmerSwitchEndpointId_2, DIMMER_SWITCH_BUTTON_2);
+	mSwitch[2].Init(kOnOffSwitchEndpointId_1, ONOFF_SWITCH_BUTTON_1);
+	mSwitch[3].Init(kOnOffSwitchEndpointId_2, ONOFF_SWITCH_BUTTON_2);
+	mSwitch[4].Init(kSpareSwitchEndpointId_1, SPARE_SWITCH_BUTTON_1);
+	mSwitch[5].Init(kSpareSwitchEndpointId_2, SPARE_SWITCH_BUTTON_1);
+	BindingHandler::GetInstance().Init();
 
 	/* Initialize LEDs */
 	LEDWidget::InitGpio();
@@ -176,6 +189,8 @@ CHIP_ERROR AppTask::Init()
 
 	sStatusLED.Init(SYSTEM_STATE_LED);
 	sIdentifyLED.Init(IDENTIFY_LED);
+	sOnOffLED_1.Init(ONOFF_SWITCH_LED_1);
+	mSwitch[2].SetLED(&sOnOffLED_1);
 
 	UpdateStatusLED();
 
@@ -283,6 +298,19 @@ void AppTask::LightingActionEventHandler(const AppEvent &event)
 	PWMDevice::Action_t action = PWMDevice::INVALID_ACTION;
 	int32_t actor = 0;
 
+	if (event.ButtonEvent.PinNo == ONOFF_SWITCH_BUTTON_1) {
+		LightSwitch *lightSwitch = Instance().GetSwitchByPin(event.ButtonEvent.PinNo);
+		if (lightSwitch) {
+			if (lightSwitch->GetLED()) {
+				lightSwitch->GetLED()->Invert();
+				if (Instance().GetSwitchByPin(event.ButtonEvent.PinNo)) {
+					Instance().UpdateClusterState(Instance().GetSwitchByPin(event.ButtonEvent.PinNo)->GetLightSwitchEndpointId());
+				}
+			}
+		}
+		return;
+	}
+
 	if (event.Type == AppEventType::Lighting) {
 		action = static_cast<PWMDevice::Action_t>(event.LightingEvent.Action);
 		actor = event.LightingEvent.Actor;
@@ -313,7 +341,7 @@ void AppTask::ButtonPushHandler(const AppEvent &event)
 				break;
 			}
 #else
-			SWITCH_BUTTON:
+			DIMMER_SWITCH_BUTTON_1:
 #endif
 			LOG_INF("Button has been pressed, keep in this state for at least 500 ms to change light sensitivity of binded lighting devices.");
 			Instance().StartTimer(Timer::DimmerTrigger, kDimmerTriggeredTimeout);
@@ -349,7 +377,7 @@ void AppTask::ButtonReleaseHandler(const AppEvent &event)
 			}
 			break;
 #if NUMBER_OF_BUTTONS == 4
-		case SWITCH_BUTTON:
+		case DIMMER_SWITCH_BUTTON_1:
 #else
 		case BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON:
 			if (!ConnectivityMgr().IsBLEAdvertisingEnabled() &&
@@ -363,15 +391,18 @@ void AppTask::ButtonReleaseHandler(const AppEvent &event)
 				break;
 			}
 #endif
+			/* TODO: add multiple PWM instance and check dimmer status */
 			if (!sWasDimmerTriggered) {
-				LightSwitch::GetInstance().InitiateActionSwitch(LightSwitch::Action::Toggle);
+				if (Instance().GetSwitchByPin(event.ButtonEvent.PinNo)) {
+					Instance().GetSwitchByPin(event.ButtonEvent.PinNo)->InitiateActionSwitch(LightSwitch::Action::Toggle);
+				}
 			}
 			Instance().CancelTimer(Timer::Dimmer);
 			Instance().CancelTimer(Timer::DimmerTrigger);
 			sWasDimmerTriggered = false;
 
 			button_event.Type = AppEventType::Button;
-			button_event.ButtonEvent.PinNo = DK_BTN2;
+			button_event.ButtonEvent.PinNo = DIMMER_SWITCH_BUTTON_1;
 			button_event.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
 			button_event.Handler = LightingActionEventHandler;
 			PostEvent(button_event);
@@ -416,12 +447,12 @@ void AppTask::TimerEventHandler(const AppEvent &event)
 		case Timer::DimmerTrigger:
 			LOG_INF("Dimming started...");
 			sWasDimmerTriggered = true;
-			LightSwitch::GetInstance().InitiateActionSwitch(LightSwitch::Action::On);
+			Instance().GetSwitchByEndPoint(1)->InitiateActionSwitch(LightSwitch::Action::On);
 			Instance().StartTimer(Timer::Dimmer, kDimmerInterval);
 			Instance().CancelTimer(Timer::DimmerTrigger);
 			break;
 		case Timer::Dimmer:
-			LightSwitch::GetInstance().DimmerChangeBrightness();
+			Instance().GetSwitchByEndPoint(1)->DimmerChangeBrightness();
 			break;
 		default:
 			break;
@@ -548,8 +579,8 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 	uint32_t buttonMask = BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON_MASK;
 	buttonEvent.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON;
 #else
-	uint32_t buttonMask = SWITCH_BUTTON_MASK;
-	buttonEvent.ButtonEvent.PinNo = SWITCH_BUTTON;
+	uint32_t buttonMask = DIMMER_SWITCH_BUTTON_1_MASK;
+	buttonEvent.ButtonEvent.PinNo = DIMMER_SWITCH_BUTTON_1;
 #endif
 
 	if (buttonMask & buttonState & hasChanged) {
@@ -559,6 +590,18 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 	} else if (buttonMask & hasChanged) {
 		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
 		buttonEvent.Handler = ButtonReleaseHandler;
+		PostEvent(buttonEvent);
+	}
+
+	buttonMask = ONOFF_SWITCH_BUTTON_1_MASK;
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_1;
+
+	if (ONOFF_SWITCH_BUTTON_1_MASK & buttonState & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_1 press");
+	} else if (ONOFF_SWITCH_BUTTON_1_MASK & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_1 release");
+		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+		buttonEvent.Handler = LightingActionEventHandler;
 		PostEvent(buttonEvent);
 	}
 }
@@ -626,13 +669,16 @@ void AppTask::ActionCompleted(PWMDevice::Action_t action, int32_t actor)
 	}
 
 	if (actor == static_cast<int32_t>(AppEventType::Button)) {
-		Instance().UpdateClusterState();
+		/* TODO: enable 2nd PWM and use pin number as button event actor */
+		Instance().UpdateClusterState(DIMMER_SWITCH_BUTTON_1);
 	}
 }
 
 void AppTask::BindingChangedEventHandler(const AppEvent &event)
 {
-	LightSwitch::GetInstance().SubscribeAttribute();
+	for (int i = 1; i < NUMBER_OF_SWITCH; i++) {
+		Instance().GetSwitchByEndPoint(i)->SubscribeAttribute();
+	}
 }
 
 void AppTask::LEDStateUpdateHandler(LEDWidget &aLedWidget)
@@ -690,22 +736,63 @@ void AppTask::DispatchEvent(const AppEvent &event)
 	}
 }
 
-void AppTask::UpdateClusterState()
+void AppTask::UpdateClusterState(chip::EndpointId aEndpointId)
 {
-	SystemLayer().ScheduleLambda([this] {
-		/* write the new on/off value */
-		EmberAfStatus status =
-			Clusters::OnOff::Attributes::OnOff::Set(kLightEndpointId, mPWMDevice.IsTurnedOn());
+	EmberAfStatus cluster_status;
+	bool onoff;
+	app::DataModel::Nullable<uint8_t> level;
 
-		if (status != EMBER_ZCL_STATUS_SUCCESS) {
-			LOG_ERR("Updating on/off cluster failed: %x", status);
+	cluster_status = Clusters::OnOff::Attributes::OnOff::Get(aEndpointId, &onoff);
+	if (cluster_status == EMBER_ZCL_STATUS_SUCCESS) {
+		if (GetSwitchByEndPoint(aEndpointId)->GetLED()) {
+			SystemLayer().ScheduleLambda([this, aEndpointId] {
+				/* write the new on/off value */
+				if (Instance().GetSwitchByEndPoint(aEndpointId)->GetLED()) {
+					EmberAfStatus status =
+						Clusters::OnOff::Attributes::OnOff::Set(aEndpointId, Instance().GetSwitchByEndPoint(aEndpointId)->GetLED()->Get());
+
+					if (status != EMBER_ZCL_STATUS_SUCCESS) {
+						LOG_ERR("Updating on/off cluster failed: %x", status);
+					}
+				}
+			});
+			return;
 		}
+	}
+	cluster_status = Clusters::LevelControl::Attributes::CurrentLevel::Get(aEndpointId, level);
+	if (cluster_status == EMBER_ZCL_STATUS_SUCCESS) {
+		SystemLayer().ScheduleLambda([this, aEndpointId] {
+			/* write the new on/off value */
+			EmberAfStatus status =
+				Clusters::OnOff::Attributes::OnOff::Set(aEndpointId, mPWMDevice.IsTurnedOn());
+			if (status != EMBER_ZCL_STATUS_SUCCESS) {
+				LOG_ERR("Updating on/off cluster failed: %x", status);
+			}
+			/* write the current level */
+			status = Clusters::LevelControl::Attributes::CurrentLevel::Set(aEndpointId, mPWMDevice.GetLevel());
+			if (status != EMBER_ZCL_STATUS_SUCCESS) {
+				LOG_ERR("Updating level cluster failed: %x", status);
+			}
+		});
+	}
+}
 
-		/* write the current level */
-		status = Clusters::LevelControl::Attributes::CurrentLevel::Set(kLightEndpointId, mPWMDevice.GetLevel());
-
-		if (status != EMBER_ZCL_STATUS_SUCCESS) {
-			LOG_ERR("Updating level cluster failed: %x", status);
+LightSwitch* AppTask::GetSwitchByEndPoint(chip::EndpointId aEndpointId)
+{
+	for (int i = 0; i < NUMBER_OF_SWITCH; i++) {
+		if (mSwitch[i].GetLightSwitchEndpointId() == aEndpointId) {
+			return &mSwitch[i];
 		}
-	});
+	}
+	return nullptr;
+}
+
+LightSwitch* AppTask::GetSwitchByPin(uint32_t aGpioPin)
+{
+	for (int i = 0; i < NUMBER_OF_SWITCH; i++) {
+		if (mSwitch[i].GetGpioPin() == aGpioPin) {
+			return &mSwitch[i];
+		}
+	}
+	return nullptr;
 }

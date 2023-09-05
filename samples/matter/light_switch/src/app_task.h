@@ -6,9 +6,12 @@
 
 #pragma once
 
+//#include <vector>
+
 #include "app_event.h"
 #include "led_widget.h"
 #include "pwm_device.h"
+#include "light_switch.h"
 
 #include <platform/CHIPDeviceLayer.h>
 
@@ -26,6 +29,10 @@
 #include "icd_util.h"
 #endif
 
+#define NUMBER_OF_SWITCH 6
+
+using namespace std;
+
 struct k_timer;
 struct Identify;
 
@@ -39,8 +46,10 @@ public:
 
 	CHIP_ERROR StartApp();
 
-	void UpdateClusterState();
+	void UpdateClusterState(chip::EndpointId aEndpointId);
 	PWMDevice &GetPWMDevice() { return mPWMDevice; }
+	LightSwitch* GetSwitchByEndPoint(chip::EndpointId aEndpointId);
+	LightSwitch* GetSwitchByPin(uint32_t aGpioPin);
 
 	static void IdentifyStartHandler(Identify *);
 	static void IdentifyStopHandler(Identify *);
@@ -76,6 +85,7 @@ private:
 	static void CancelTimer(Timer);
 
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
+	LightSwitch mSwitch[NUMBER_OF_SWITCH];
 	PWMDevice mPWMDevice;
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;

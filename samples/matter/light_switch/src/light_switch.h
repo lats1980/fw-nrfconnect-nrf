@@ -11,6 +11,8 @@
 #include <controller/ReadInteraction.h>
 #include <atomic>
 
+#include "led_widget.h"
+
 using namespace chip;
 
 /** @class LightSwitch
@@ -31,17 +33,14 @@ public:
 		mOnDeviceConnectedCallback(OnDeviceConnectedFn, this),
 		mOnDeviceConnectionFailureCallback(OnDeviceConnectionFailureFn, this) {};
 
-	void Init(chip::EndpointId aLightSwitchEndpoint);
+	void Init(chip::EndpointId aLightSwitchEndpoint, uint32_t aGpioPin);
 	void InitiateActionSwitch(Action);
 	void DimmerChangeBrightness();
 	chip::EndpointId GetLightSwitchEndpointId() { return mLightSwitchEndpoint; }
+	uint32_t GetGpioPin() { return mGpioPin; }
+	void SetLED(LEDWidget *aLED) { mLED = aLED; }
+	LEDWidget* GetLED() { return mLED; }
 	void SubscribeAttribute();
-
-	static LightSwitch &GetInstance()
-	{
-		static LightSwitch sLightSwitch;
-		return sLightSwitch;
-	}
 
 private:
 	constexpr static auto kOnePercentBrightnessApproximation = 3;
@@ -54,4 +53,6 @@ private:
 	chip::Callback::Callback<chip::OnDeviceConnectionFailure> mOnDeviceConnectionFailureCallback;
 
 	chip::EndpointId mLightSwitchEndpoint;
+	uint32_t mGpioPin;
+	LEDWidget *mLED;
 };
