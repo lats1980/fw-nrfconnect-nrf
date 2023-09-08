@@ -597,9 +597,9 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_1;
 
 	if (ONOFF_SWITCH_BUTTON_1_MASK & buttonState & hasChanged) {
-		LOG_DBG("ONOFF_SWITCH_BUTTON_1 press");
+		//LOG_DBG("ONOFF_SWITCH_BUTTON_1 press");
 	} else if (ONOFF_SWITCH_BUTTON_1_MASK & hasChanged) {
-		LOG_DBG("ONOFF_SWITCH_BUTTON_1 release");
+		//LOG_DBG("ONOFF_SWITCH_BUTTON_1 release");
 		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
 		buttonEvent.Handler = LightingActionEventHandler;
 		PostEvent(buttonEvent);
@@ -678,6 +678,7 @@ void AppTask::BindingChangedEventHandler(const AppEvent &event)
 {
 	for (int i = 1; i < NUMBER_OF_SWITCH; i++) {
 		Instance().GetSwitchByEndPoint(i)->SubscribeAttribute();
+		k_sleep(K_MSEC(3000));
 	}
 }
 

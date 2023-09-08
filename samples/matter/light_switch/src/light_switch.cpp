@@ -77,27 +77,51 @@ void LightSwitch::OnDeviceConnectedFn(void * context, Messaging::ExchangeManager
                                          const SessionHandle & sessionHandle)
 {
 	CHIP_ERROR ret = CHIP_NO_ERROR;
+	LightSwitch * lightSwitch = static_cast<LightSwitch *>(context);
+	VerifyOrDie(lightSwitch != nullptr);
 	BindingTable &bindingTable = BindingTable::GetInstance();
 
-	auto onSuccessCb = [](const app::ConcreteDataAttributePath & attributePath, const auto & dataResponse) {
+	auto onOnOffCb = [lightSwitch](const app::ConcreteDataAttributePath & attributePath, const auto & dataResponse) {
 		ClusterId clusterId = attributePath.mClusterId;
 		AttributeId attributeId = attributePath.mAttributeId;
 		EndpointId endpointId = attributePath.mEndpointId;
+		uint8_t responseValue;
 #ifdef CONFIG_CHIP_NUS
 		static char buffer[20];
 #endif
-		if (dataResponse == true) {
-			ChipLogError(NotSpecified, "Update attribte: on");
+		if (clusterId == Clusters::OnOff::Id) {
+			if (dataResponse == true) {
+				ChipLogError(NotSpecified, "EP:%u on", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId());
 #ifdef CONFIG_CHIP_NUS
-			sprintf(buffer, "switch on");
-			GetNUSService().SendData(buffer, sizeof(buffer));
+				sprintf(buffer, "EP:%u on", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId());
+				GetNUSService().SendData(buffer, sizeof(buffer));
 #endif
-		} else {
-			ChipLogError(NotSpecified, "Update attribte: off");
+			} else {
+				ChipLogError(NotSpecified, "EP:%u off", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId());
 #ifdef CONFIG_CHIP_NUS
-			sprintf(buffer, "switch off");
-			GetNUSService().SendData(buffer, sizeof(buffer));
+				sprintf(buffer, "EP:%u off", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId());
+				GetNUSService().SendData(buffer, sizeof(buffer));
 #endif
+			}
+		}
+	};
+
+	auto onCurrentLevelCb = [lightSwitch](const app::ConcreteDataAttributePath & attributePath, const auto & dataResponse) {
+		ClusterId clusterId = attributePath.mClusterId;
+		uint8_t responseValue;
+#ifdef CONFIG_CHIP_NUS
+		static char buffer[20];
+#endif
+
+		if (clusterId == Clusters::LevelControl::Id) {
+			if (!dataResponse.IsNull()) {
+				responseValue = dataResponse.Value();
+				ChipLogError(NotSpecified, "EP:%u level:%u", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId(), responseValue);
+#ifdef CONFIG_CHIP_NUS
+				sprintf(buffer, "EP:%u level:%u", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId(), responseValue);
+				GetNUSService().SendData(buffer, sizeof(buffer));
+#endif
+			}
 		}
 	};
 
@@ -112,13 +136,24 @@ void LightSwitch::OnDeviceConnectedFn(void * context, Messaging::ExchangeManager
 		switch (entry.type) {
 		case EMBER_UNICAST_BINDING:
 			if (entry.nodeId == sessionHandle->GetPeer().GetNodeId()) {
-				ChipLogError(NotSpecified, "Subscribe onoff attribute of EP: %u", entry.remote, (int)sessionHandle->GetPeer().GetNodeId());
-				ret = Controller::SubscribeAttribute<Clusters::OnOff::Attributes::OnOff::TypeInfo>(& exchangeMgr,
-										sessionHandle, entry.remote, onSuccessCb, onFailureCb,
-										0, 20, onSubscriptionEstablishedCb, nullptr, false, true);
-				if (CHIP_NO_ERROR != ret) {
-					ChipLogError(NotSpecified, "Subscribe Command Request ERROR: %s", ErrorStr(ret));
+				if (entry.clusterId == Clusters::OnOff::Id) {
+					ChipLogError(NotSpecified, "Subscribe onoff attribute of EP: %u", entry.remote, (int)sessionHandle->GetPeer().GetNodeId());
+					ret = Controller::SubscribeAttribute<Clusters::OnOff::Attributes::OnOff::TypeInfo>(& exchangeMgr,
+											sessionHandle, entry.remote, onOnOffCb, onFailureCb,
+											0, 20, onSubscriptionEstablishedCb, nullptr, false, true);
+					if (CHIP_NO_ERROR != ret) {
+						ChipLogError(NotSpecified, "Subscribe Command Request ERROR: %s", ErrorStr(ret));
+					}
+				} else if (entry.clusterId == Clusters::LevelControl::Id) {
+					ChipLogError(NotSpecified, "Subscribe level attribute of EP: %u", entry.remote, (int)sessionHandle->GetPeer().GetNodeId());
+					ret = Controller::SubscribeAttribute<Clusters::LevelControl::Attributes::CurrentLevel::TypeInfo>(& exchangeMgr,
+											sessionHandle, entry.remote, onCurrentLevelCb, onFailureCb,
+											3, 20, onSubscriptionEstablishedCb, nullptr, false, true);
+					if (CHIP_NO_ERROR != ret) {
+						ChipLogError(NotSpecified, "Subscribe Command Request ERROR: %s", ErrorStr(ret));
+					}
 				}
+				k_sleep(K_MSEC(100));
 			}
 			break;
 		case EMBER_MULTICAST_BINDING:
@@ -145,10 +180,13 @@ void LightSwitch::SubscribeAttribute(void)
 	for (auto &entry : bindingTable) {
 		switch (entry.type) {
 		case EMBER_UNICAST_BINDING:
-			ChipLogError(NotSpecified, "SubscribeAttribute: Connect to %d", (int)entry.nodeId);
-			server->GetCASESessionManager()->FindOrEstablishSession(ScopedNodeId(entry.nodeId, entry.fabricIndex),
-                                                            &mOnDeviceConnectedCallback, &mOnDeviceConnectionFailureCallback);
-			k_sleep(K_MSEC(1000));
+			if (entry.local == mLightSwitchEndpoint) {
+				ChipLogError(NotSpecified, "SubscribeAttribute: Connect to %d", (int)entry.nodeId);
+				server->GetCASESessionManager()->FindOrEstablishSession(ScopedNodeId(entry.nodeId, entry.fabricIndex),
+																&mOnDeviceConnectedCallback, &mOnDeviceConnectionFailureCallback);
+				k_sleep(K_MSEC(1000));
+				return;
+			}
 			break;
 		case EMBER_MULTICAST_BINDING:
 			break;
