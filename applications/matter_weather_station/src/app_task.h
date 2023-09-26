@@ -24,10 +24,22 @@
 #include "icd_util.h"
 #endif
 
+/** Number of accelerometer channels. */
+#define ACCELEROMETER_CHANNELS 3
+
 struct k_timer;
 
 class AppTask {
 public:
+	enum UpSide_t : uint8_t {
+		UNDEFINED = 0,
+		TOP,
+		BOTTOM,
+		LEFT,
+		RIGHT,
+		FRONT,
+		REAR
+	};
 	CHIP_ERROR StartApp();
 
 	void PostEvent(const AppEvent &aEvent);
@@ -46,6 +58,7 @@ private:
 	void UpdatePressureClusterState();
 	void UpdateRelativeHumidityClusterState();
 	void UpdatePowerSourceClusterState();
+	static void UpdateUpDirection(float aX, float aY, float aZ);
 
 	static void ButtonStateHandler(uint32_t buttonState, uint32_t hasChanged);
 	static void ButtonPushHandler();
@@ -55,9 +68,11 @@ private:
 	static void IdentifyTimerHandler();
 	static void UpdateStatusLED();
 	static void LEDStateUpdateHandler(LEDWidget &ledWidget);
+	static void XYZMeasurementsTimerHandler();
 	static void ChipEventHandler(const chip::DeviceLayer::ChipDeviceEvent *event, intptr_t arg);
 
 	static AppTask sAppTask;
+	UpSide_t mUpSide;
 
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;

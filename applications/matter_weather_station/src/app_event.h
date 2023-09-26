@@ -16,6 +16,7 @@ struct AppEvent {
 		FunctionRelease,
 		FunctionTimer,
 		MeasurementsTimer,
+		XYZMeasurementsTimer,
 		IdentifyTimer,
 	};
 

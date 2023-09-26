@@ -45,7 +45,7 @@ LOG_MODULE_DECLARE(app);
 namespace
 {
 enum class FunctionTimerMode { kDisabled, kFactoryResetTrigger, kFactoryResetComplete };
-enum class LedState { kAlive, kAdvertisingBle, kConnectedBle, kProvisioned };
+enum class LedState { kAlive, kAdvertisingBle, kConnectedBle, kProvisioned, kTopSide, kLeftSide, kBottomSide, kRightSide, kRearSide};
 
 #if CONFIG_AVERAGE_CURRENT_CONSUMPTION <= 0
 #error Invalid CONFIG_AVERAGE_CURRENT_CONSUMPTION value set
@@ -73,6 +73,8 @@ constexpr int16_t kMaximalOperatingVoltageMv = 4050;
 constexpr int16_t kWarningThresholdVoltageMv = 3450;
 constexpr int16_t kCriticalThresholdVoltageMv = 3250;
 constexpr uint8_t kMinBatteryPercentage = 0;
+//constexpr size_t kXYZMeasurementsIntervalMs = 16;
+constexpr size_t kXYZMeasurementsIntervalMs = 500;
 /* Value is expressed in half percent units ranging from 0 to 200. */
 constexpr uint8_t kMaxBatteryPercentage = 200;
 /* Battery capacity in uAh */
@@ -87,6 +89,7 @@ constexpr size_t kIdentifyTimerIntervalMs = 500;
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
 k_timer sMeasurementsTimer;
+k_timer sXYZMeasurementsTimer;
 k_timer sIdentifyTimer;
 FunctionTimerMode sFunctionTimerMode = FunctionTimerMode::kDisabled;
 
@@ -117,6 +120,7 @@ Identify sIdentifyPressure = { chip::EndpointId{ kPressureMeasurementEndpointId 
 			       AppTask::OnIdentifyStop, EMBER_ZCL_IDENTIFY_IDENTIFY_TYPE_AUDIBLE_BEEP };
 
 const device *sBme688SensorDev = DEVICE_DT_GET_ONE(bosch_bme680);
+const device *sAdxl362SensorDev = DEVICE_DT_GET_ONE(adi_adxl362);
 } /* namespace */
 
 AppTask AppTask::sAppTask;
@@ -173,6 +177,11 @@ CHIP_ERROR AppTask::Init()
 
 	if (!device_is_ready(sBme688SensorDev)) {
 		LOG_ERR("BME688 sensor device not ready");
+		return chip::System::MapErrorZephyr(-ENODEV);
+	}
+
+	if (!device_is_ready(sAdxl362SensorDev)) {
+		LOG_ERR("ADXL362 sensor device not ready");
 		return chip::System::MapErrorZephyr(-ENODEV);
 	}
 
@@ -233,6 +242,10 @@ CHIP_ERROR AppTask::Init()
 	k_timer_start(&sMeasurementsTimer, K_MSEC(kMeasurementsIntervalMs), K_MSEC(kMeasurementsIntervalMs));
 	k_timer_init(
 		&sIdentifyTimer, [](k_timer *) { sAppTask.PostEvent(AppEvent{ AppEvent::IdentifyTimer }); }, nullptr);
+	k_timer_init(
+		&sXYZMeasurementsTimer, [](k_timer *) { sAppTask.PostEvent(AppEvent{ AppEvent::XYZMeasurementsTimer }); },
+		nullptr);
+	k_timer_start(&sXYZMeasurementsTimer, K_MSEC(kXYZMeasurementsIntervalMs), K_MSEC(kXYZMeasurementsIntervalMs));
 
 	/* Initialize CHIP server */
 	static chip::CommonCaseDeviceServerInitParams initParams;
@@ -322,6 +335,9 @@ void AppTask::DispatchEvent(AppEvent &event)
 	case AppEvent::MeasurementsTimer:
 		MeasurementsTimerHandler();
 		break;
+	case AppEvent::XYZMeasurementsTimer:
+		XYZMeasurementsTimerHandler();
+		break;
 	case AppEvent::IdentifyTimer:
 		IdentifyTimerHandler();
 		break;
@@ -382,6 +398,31 @@ void AppTask::FunctionTimerHandler()
 void AppTask::MeasurementsTimerHandler()
 {
 	sAppTask.UpdateClustersState();
+}
+
+void AppTask::XYZMeasurementsTimerHandler()
+{
+	struct sensor_value data[ACCELEROMETER_CHANNELS];
+	int ret;
+	float float_data[ACCELEROMETER_CHANNELS];
+
+	ret = sensor_sample_fetch(sAdxl362SensorDev);
+	if (ret != 0) {
+		LOG_ERR("Fetching data from ADXL362 sensor failed with: %d", ret);
+		return;
+	}
+	ret = sensor_channel_get(sAdxl362SensorDev, SENSOR_CHAN_ACCEL_XYZ, &data[0]);
+	if (ret) {
+		LOG_ERR("sensor_channel_get, error: %d", ret);
+		return;
+	}
+/*
+	for (size_t i = 0; i < 3; i++) {
+		float_data[i] = sensor_value_to_double(&data[i]);
+		LOG_ERR("i: %d %lf", i, float_data[i]);
+	}
+*/
+	UpdateUpDirection(sensor_value_to_double(&data[0]), sensor_value_to_double(&data[1]), sensor_value_to_double(&data[2]));
 }
 
 void AppTask::OnIdentifyStart(Identify *)
@@ -595,11 +636,25 @@ void AppTask::UpdateStatusLED()
 		nextState = LedState::kAlive;
 	}
 
+	if (GetAppTask().mUpSide == AppTask::TOP) {
+		nextState = LedState::kTopSide;
+	} else if (GetAppTask().mUpSide == AppTask::BOTTOM) {
+		nextState = LedState::kBottomSide;
+	} else if (GetAppTask().mUpSide == AppTask::RIGHT) {
+		nextState = LedState::kRightSide;
+	} else if (GetAppTask().mUpSide == AppTask::LEFT) {
+		nextState = LedState::kLeftSide;
+	} else if (GetAppTask().mUpSide == AppTask::REAR) {
+		nextState = LedState::kRearSide;
+	}
+
 	/* In case of changing signalled state, turn off all leds to synchronize blinking */
 	if (nextState != sLedState) {
 		sGreenLED.Set(false);
 		sBlueLED.Set(false);
 		sRedLED.Set(false);
+	} else {
+		return;
 	}
 	sLedState = nextState;
 
@@ -617,8 +672,49 @@ void AppTask::UpdateStatusLED()
 		sBlueLED.Blink(50, 950);
 		sRedLED.Blink(50, 950);
 		break;
+	case LedState::kTopSide:
+		sBlueLED.Set(true);
+		break;
+	case LedState::kBottomSide:
+		sRedLED.Set(true);
+		break;
+	case LedState::kRightSide:
+		sGreenLED.Set(true);
+		sRedLED.Set(true);
+		break;
+	case LedState::kLeftSide:
+		sGreenLED.Set(true);
+		break;
+	case LedState::kRearSide:
+		sRedLED.Set(true);
+		sGreenLED.Set(true);
+		sBlueLED.Set(true);
+		break;
 	default:
 		break;
+	}
+}
+
+void AppTask::UpdateUpDirection(float aX, float aY, float aZ)
+{
+	AppTask::UpSide_t newUpSide = AppTask::UNDEFINED;
+
+	if ((aX < 4) && (aY > 8) && (aZ > 0) && (aZ < 8)) {
+		newUpSide = AppTask::TOP;
+	} else if ((aX < 4) && (aY < -8) && (aZ > 0) && (aZ < 8)) {
+		newUpSide = AppTask::BOTTOM;
+	} else if ((aX < -8) && (aY < 4) && (aZ > 0) && (aZ < 8)) {
+		newUpSide = AppTask::RIGHT;
+	} else if ((aX > 8) && (aY < 4) && (aZ > 0) && (aZ < 8)) {
+		newUpSide = AppTask::LEFT;
+	} else if (aZ < -4) {
+		newUpSide = AppTask::FRONT;
+	} else if (aZ > 12) {
+		newUpSide = AppTask::REAR;
+	}
+	if (sAppTask.mUpSide != newUpSide) {
+		sAppTask.mUpSide = newUpSide;
+		UpdateStatusLED();
 	}
 }
 
