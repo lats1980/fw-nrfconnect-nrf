@@ -6,11 +6,8 @@
 
 #pragma once
 
-//#include <vector>
-
 #include "app_event.h"
 #include "led_widget.h"
-#include "pwm_device.h"
 #include "light_switch.h"
 
 #include <platform/CHIPDeviceLayer.h>
@@ -29,7 +26,7 @@
 #include "icd_util.h"
 #endif
 
-#define NUMBER_OF_SWITCH 6
+#define NUMBER_OF_SWITCH 4
 
 using namespace std;
 
@@ -47,7 +44,6 @@ public:
 	CHIP_ERROR StartApp();
 
 	void UpdateClusterState(chip::EndpointId aEndpointId);
-	PWMDevice &GetPWMDevice() { return mPWMDevice; }
 	LightSwitch* GetSwitchByEndPoint(chip::EndpointId aEndpointId);
 	LightSwitch* GetSwitchByPin(uint32_t aGpioPin);
 
@@ -55,7 +51,7 @@ public:
 	static void IdentifyStopHandler(Identify *);
 
 private:
-	enum class Timer : uint8_t { Function, DimmerTrigger, Dimmer };
+	enum class Timer : uint8_t { Function };
 	enum class Button : uint8_t {
 		Function,
 		Dimmer,
@@ -77,8 +73,6 @@ private:
 	static void LEDStateUpdateHandler(LEDWidget &ledWidget);
 	static void FunctionTimerTimeoutCallback(k_timer *timer);
 
-	static void ActionInitiated(PWMDevice::Action_t action, int32_t actor);
-	static void ActionCompleted(PWMDevice::Action_t action, int32_t actor);
 	static void UpdateStatusLED();
 
 	static void StartTimer(Timer, uint32_t);
@@ -86,7 +80,6 @@ private:
 
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
 	LightSwitch mSwitch[NUMBER_OF_SWITCH];
-	PWMDevice mPWMDevice;
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
 #endif

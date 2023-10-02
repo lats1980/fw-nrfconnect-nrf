@@ -35,7 +35,6 @@ public:
 
 	void Init(chip::EndpointId aLightSwitchEndpoint, uint32_t aGpioPin);
 	void InitiateActionSwitch(Action);
-	void DimmerChangeBrightness();
 	chip::EndpointId GetLightSwitchEndpointId() { return mLightSwitchEndpoint; }
 	uint32_t GetGpioPin() { return mGpioPin; }
 	void SetLED(LEDWidget *aLED) { mLED = aLED; }

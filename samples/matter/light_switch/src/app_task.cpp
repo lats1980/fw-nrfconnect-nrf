@@ -9,7 +9,7 @@
 #include "app_config.h"
 #include "led_util.h"
 #include "light_switch.h"
-#include "pwm_device.h"
+//#include "pwm_device.h"
 #include "binding_handler.h"
 
 #ifdef CONFIG_CHIP_NUS
@@ -60,18 +60,12 @@ namespace
 {
 constexpr uint32_t kFactoryResetTriggerTimeout = 3000;
 constexpr uint32_t kFactoryResetCancelWindowTimeout = 3000;
-constexpr uint32_t kDimmerTriggeredTimeout = 500;
-constexpr uint32_t kDimmerInterval = 300;
 constexpr size_t kAppEventQueueSize = 10;
-constexpr EndpointId kDimmerSwitchEndpointId_1 = 1;
-constexpr EndpointId kDimmerSwitchEndpointId_2 = 2;
-constexpr EndpointId kOnOffSwitchEndpointId_1 = 3;
-constexpr EndpointId kOnOffSwitchEndpointId_2 = 4;
-constexpr EndpointId kSpareSwitchEndpointId_1 = 5;
-constexpr EndpointId kSpareSwitchEndpointId_2 = 6;
+constexpr EndpointId kOnOffLightEndpointId_1 = 3;
+constexpr EndpointId kOnOffLightEndpointId_2 = 6;
+constexpr EndpointId kOnOffLightEndpointId_3 = 9;
+constexpr EndpointId kOnOffLightEndpointId_4 = 12;
 constexpr EndpointId kLightEndpointId = 1;
-constexpr uint8_t kDefaultMinLevel = 0;
-constexpr uint8_t kDefaultMaxLevel = 254;
 
 #ifdef CONFIG_CHIP_NUS
 constexpr uint16_t kAdvertisingIntervalMin = 400;
@@ -80,15 +74,16 @@ constexpr uint8_t kSwitchNUSPriority = 2;
 #endif
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
-k_timer sDimmerPressKeyTimer;
-k_timer sDimmerTimer;
 
 Identify sIdentify = { kLightEndpointId, AppTask::IdentifyStartHandler, AppTask::IdentifyStopHandler,
 		       EMBER_ZCL_IDENTIFY_IDENTIFY_TYPE_VISIBLE_LED };
 
-LEDWidget sStatusLED;
-LEDWidget sIdentifyLED;
+LEDWidget *sStatusLED;
+LEDWidget *sIdentifyLED;
 LEDWidget sOnOffLED_1;
+LEDWidget sOnOffLED_2;
+LEDWidget sOnOffLED_3;
+LEDWidget sOnOffLED_4;
 #if NUMBER_OF_LEDS == 4
 FactoryResetLEDsWrapper<2> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED, FACTORY_RESET_SIGNAL_LED1 } };
 #endif
@@ -96,20 +91,6 @@ FactoryResetLEDsWrapper<2> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED, FACTOR
 bool sIsNetworkProvisioned = false;
 bool sIsNetworkEnabled = false;
 bool sHaveBLEConnections = false;
-bool sWasDimmerTriggered = false;
-
-const struct pwm_dt_spec sLightPwmDevice = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led1));
-
-// Define a custom attribute persister which makes actual write of the CurrentLevel attribute value
-// to the non-volatile storage only when it has remained constant for 5 seconds. This is to reduce
-// the flash wearout when the attribute changes frequently as a result of MoveToLevel command.
-// DeferredAttribute object describes a deferred attribute, but also holds a buffer with a value to
-// be written, so it must live so long as the DeferredAttributePersistenceProvider object.
-DeferredAttribute gCurrentLevelPersister(ConcreteAttributePath(kLightEndpointId, Clusters::LevelControl::Id,
-							       Clusters::LevelControl::Attributes::CurrentLevel::Id));
-DeferredAttributePersistenceProvider gDeferredAttributePersister(Server::GetInstance().GetDefaultAttributePersister(),
-								 Span<DeferredAttribute>(&gCurrentLevelPersister, 1),
-								 System::Clock::Milliseconds32(5000));
 
 } /* namespace */
 
@@ -175,22 +156,26 @@ CHIP_ERROR AppTask::Init()
 	return CHIP_ERROR_INTERNAL;
 #endif /* CONFIG_NET_L2_OPENTHREAD */
 
-	mSwitch[0].Init(kDimmerSwitchEndpointId_1, DIMMER_SWITCH_BUTTON_1);
-	mSwitch[1].Init(kDimmerSwitchEndpointId_2, DIMMER_SWITCH_BUTTON_2);
-	mSwitch[2].Init(kOnOffSwitchEndpointId_1, ONOFF_SWITCH_BUTTON_1);
-	mSwitch[3].Init(kOnOffSwitchEndpointId_2, ONOFF_SWITCH_BUTTON_2);
-	mSwitch[4].Init(kSpareSwitchEndpointId_1, SPARE_SWITCH_BUTTON_1);
-	mSwitch[5].Init(kSpareSwitchEndpointId_2, SPARE_SWITCH_BUTTON_1);
+	mSwitch[0].Init(kOnOffLightEndpointId_1, ONOFF_SWITCH_BUTTON_1);
+	mSwitch[1].Init(kOnOffLightEndpointId_2, ONOFF_SWITCH_BUTTON_2);
+	mSwitch[2].Init(kOnOffLightEndpointId_3, ONOFF_SWITCH_BUTTON_3);
+	mSwitch[3].Init(kOnOffLightEndpointId_4, ONOFF_SWITCH_BUTTON_4);
 	BindingHandler::GetInstance().Init();
 
 	/* Initialize LEDs */
 	LEDWidget::InitGpio();
 	LEDWidget::SetStateUpdateCallback(LEDStateUpdateHandler);
 
-	sStatusLED.Init(SYSTEM_STATE_LED);
-	sIdentifyLED.Init(IDENTIFY_LED);
 	sOnOffLED_1.Init(ONOFF_SWITCH_LED_1);
-	mSwitch[2].SetLED(&sOnOffLED_1);
+	sOnOffLED_2.Init(ONOFF_SWITCH_LED_2);
+	sOnOffLED_3.Init(ONOFF_SWITCH_LED_3);
+	sOnOffLED_4.Init(ONOFF_SWITCH_LED_4);
+	sStatusLED = &sOnOffLED_1;
+	sIdentifyLED = &sOnOffLED_2;
+	mSwitch[0].SetLED(&sOnOffLED_1);
+	mSwitch[1].SetLED(&sOnOffLED_2);
+	mSwitch[2].SetLED(&sOnOffLED_3);
+	mSwitch[3].SetLED(&sOnOffLED_4);
 
 	UpdateStatusLED();
 
@@ -203,10 +188,6 @@ CHIP_ERROR AppTask::Init()
 
 	/* Initialize timers */
 	k_timer_init(&sFunctionTimer, AppTask::FunctionTimerTimeoutCallback, nullptr);
-	k_timer_init(&sDimmerPressKeyTimer, AppTask::FunctionTimerTimeoutCallback, nullptr);
-	k_timer_init(&sDimmerTimer, AppTask::FunctionTimerTimeoutCallback, nullptr);
-	k_timer_user_data_set(&sDimmerTimer, this);
-	k_timer_user_data_set(&sDimmerPressKeyTimer, this);
 	k_timer_user_data_set(&sFunctionTimer, this);
 
 #ifdef CONFIG_MCUMGR_TRANSPORT_BT
@@ -214,20 +195,6 @@ CHIP_ERROR AppTask::Init()
 	GetDFUOverSMP().Init();
 	GetDFUOverSMP().ConfirmNewImage();
 #endif
-
-	/* Initialize lighting device (PWM) */
-	uint8_t minLightLevel = kDefaultMinLevel;
-	Clusters::LevelControl::Attributes::MinLevel::Get(kLightEndpointId, &minLightLevel);
-
-	uint8_t maxLightLevel = kDefaultMaxLevel;
-	Clusters::LevelControl::Attributes::MaxLevel::Get(kLightEndpointId, &maxLightLevel);
-
-	ret = mPWMDevice.Init(&sLightPwmDevice, minLightLevel, maxLightLevel, maxLightLevel);
-	if (ret != 0) {
-		return chip::System::MapErrorZephyr(ret);
-	}
-	mPWMDevice.SetCallbacks(ActionInitiated, ActionCompleted);
-
 #ifdef CONFIG_CHIP_NUS
 	/* Initialize Nordic UART Service for Switch purposes */
 	if (!GetNUSService().Init(kSwitchNUSPriority, kAdvertisingIntervalMin, kAdvertisingIntervalMax)) {
@@ -255,7 +222,6 @@ CHIP_ERROR AppTask::Init()
 	(void)initParams.InitializeStaticResourcesBeforeServerInit();
 
 	ReturnErrorOnFailure(chip::Server::GetInstance().Init(initParams));
-	app::SetAttributePersistenceProvider(&gDeferredAttributePersister);
 	ConfigurationMgr().LogDeviceConfig();
 	PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
 
@@ -295,10 +261,7 @@ CHIP_ERROR AppTask::StartApp()
 
 void AppTask::LightingActionEventHandler(const AppEvent &event)
 {
-	PWMDevice::Action_t action = PWMDevice::INVALID_ACTION;
-	int32_t actor = 0;
-
-	if (event.ButtonEvent.PinNo == ONOFF_SWITCH_BUTTON_1) {
+	if (event.ButtonEvent.PinNo == ONOFF_SWITCH_BUTTON_1 || event.ButtonEvent.PinNo == ONOFF_SWITCH_BUTTON_2 || event.ButtonEvent.PinNo == ONOFF_SWITCH_BUTTON_3 || event.ButtonEvent.PinNo == ONOFF_SWITCH_BUTTON_4) {
 		LightSwitch *lightSwitch = Instance().GetSwitchByPin(event.ButtonEvent.PinNo);
 		if (lightSwitch) {
 			if (lightSwitch->GetLED()) {
@@ -310,18 +273,6 @@ void AppTask::LightingActionEventHandler(const AppEvent &event)
 		}
 		return;
 	}
-
-	if (event.Type == AppEventType::Lighting) {
-		action = static_cast<PWMDevice::Action_t>(event.LightingEvent.Action);
-		actor = event.LightingEvent.Actor;
-	} else if (event.Type == AppEventType::Button) {
-		action = Instance().mPWMDevice.IsTurnedOn() ? PWMDevice::OFF_ACTION : PWMDevice::ON_ACTION;
-		actor = static_cast<int32_t>(AppEventType::Button);
-	}
-
-	if (action != PWMDevice::INVALID_ACTION && Instance().mPWMDevice.InitiateAction(action, actor, NULL)) {
-		LOG_INF("Action is already in progress or active.");
-	}
 }
 
 
@@ -332,19 +283,6 @@ void AppTask::ButtonPushHandler(const AppEvent &event)
 		case FUNCTION_BUTTON:
 			Instance().StartTimer(Timer::Function, kFactoryResetTriggerTimeout);
 			Instance().mFunction = FunctionEvent::SoftwareUpdate;
-			break;
-		case
-#if NUMBER_OF_BUTTONS == 2
-			BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON:
-			if (!ConnectivityMgr().IsBLEAdvertisingEnabled() &&
-			    Server::GetInstance().GetFabricTable().FabricCount() == 0) {
-				break;
-			}
-#else
-			DIMMER_SWITCH_BUTTON_1:
-#endif
-			LOG_INF("Button has been pressed, keep in this state for at least 500 ms to change light sensitivity of binded lighting devices.");
-			Instance().StartTimer(Timer::DimmerTrigger, kDimmerTriggeredTimeout);
 			break;
 		default:
 			break;
@@ -376,37 +314,6 @@ void AppTask::ButtonReleaseHandler(const AppEvent &event)
 				LOG_INF("Factory Reset has been canceled");
 			}
 			break;
-#if NUMBER_OF_BUTTONS == 4
-		case DIMMER_SWITCH_BUTTON_1:
-#else
-		case BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON:
-			if (!ConnectivityMgr().IsBLEAdvertisingEnabled() &&
-			    Server::GetInstance().GetFabricTable().FabricCount() == 0) {
-				AppEvent buttonEvent;
-				buttonEvent.Type = AppEventType::Button;
-				buttonEvent.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON;
-				buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
-				buttonEvent.Handler = StartBLEAdvertisementHandler;
-				PostEvent(buttonEvent);
-				break;
-			}
-#endif
-			/* TODO: add multiple PWM instance and check dimmer status */
-			if (!sWasDimmerTriggered) {
-				if (Instance().GetSwitchByPin(event.ButtonEvent.PinNo)) {
-					Instance().GetSwitchByPin(event.ButtonEvent.PinNo)->InitiateActionSwitch(LightSwitch::Action::Toggle);
-				}
-			}
-			Instance().CancelTimer(Timer::Dimmer);
-			Instance().CancelTimer(Timer::DimmerTrigger);
-			sWasDimmerTriggered = false;
-
-			button_event.Type = AppEventType::Button;
-			button_event.ButtonEvent.PinNo = DIMMER_SWITCH_BUTTON_1;
-			button_event.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
-			button_event.Handler = LightingActionEventHandler;
-			PostEvent(button_event);
-			break;
 		default:
 			break;
 		}
@@ -426,14 +333,14 @@ void AppTask::TimerEventHandler(const AppEvent &event)
 
 #ifdef CONFIG_STATE_LEDS
 				/* reset all LEDs to synchronize factory reset blinking */
-				sStatusLED.Set(false);
-				sIdentifyLED.Set(false);
+				sStatusLED->Set(false);
+				sIdentifyLED->Set(false);
 #if NUMBER_OF_LEDS == 4
 				sFactoryResetLEDs.Set(false);
 #endif
 
-				sStatusLED.Blink(LedConsts::kBlinkRate_ms);
-				sIdentifyLED.Blink(LedConsts::kBlinkRate_ms);
+				sStatusLED->Blink(LedConsts::kBlinkRate_ms);
+				sIdentifyLED->Blink(LedConsts::kBlinkRate_ms);
 #if NUMBER_OF_LEDS == 4
 				sFactoryResetLEDs.Blink(LedConsts::kBlinkRate_ms);
 #endif
@@ -443,16 +350,6 @@ void AppTask::TimerEventHandler(const AppEvent &event)
 				LOG_INF("Factory Reset triggered");
 				chip::Server::GetInstance().ScheduleFactoryReset();
 			}
-			break;
-		case Timer::DimmerTrigger:
-			LOG_INF("Dimming started...");
-			sWasDimmerTriggered = true;
-			Instance().GetSwitchByEndPoint(1)->InitiateActionSwitch(LightSwitch::Action::On);
-			Instance().StartTimer(Timer::Dimmer, kDimmerInterval);
-			Instance().CancelTimer(Timer::DimmerTrigger);
-			break;
-		case Timer::Dimmer:
-			Instance().GetSwitchByEndPoint(1)->DimmerChangeBrightness();
 			break;
 		default:
 			break;
@@ -464,7 +361,7 @@ void AppTask::IdentifyStartHandler(Identify *)
 {
 	AppEvent event;
 	event.Type = AppEventType::IdentifyStart;
-	event.Handler = [](const AppEvent &) { sIdentifyLED.Blink(LedConsts::kIdentifyBlinkRate_ms); };
+	event.Handler = [](const AppEvent &) { sIdentifyLED->Blink(LedConsts::kIdentifyBlinkRate_ms); };
 	PostEvent(event);
 }
 
@@ -472,7 +369,7 @@ void AppTask::IdentifyStopHandler(Identify *)
 {
 	AppEvent event;
 	event.Type = AppEventType::IdentifyStop;
-	event.Handler = [](const AppEvent &) { sIdentifyLED.Set(false); };
+	event.Handler = [](const AppEvent &) { sIdentifyLED->Set(false); };
 	PostEvent(event);
 }
 
@@ -548,12 +445,12 @@ void AppTask::UpdateStatusLED()
 	 *
 	 * Otherwise, blink the LED for a very short time. */
 	if (sIsNetworkProvisioned && sIsNetworkEnabled) {
-		sStatusLED.Set(true);
+		sStatusLED->Set(true);
 	} else if (sHaveBLEConnections) {
-		sStatusLED.Blink(LedConsts::StatusLed::Unprovisioned::kOn_ms,
+		sStatusLED->Blink(LedConsts::StatusLed::Unprovisioned::kOn_ms,
 				 LedConsts::StatusLed::Unprovisioned::kOff_ms);
 	} else {
-		sStatusLED.Blink(LedConsts::StatusLed::Provisioned::kOn_ms, LedConsts::StatusLed::Provisioned::kOff_ms);
+		sStatusLED->Blink(LedConsts::StatusLed::Provisioned::kOn_ms, LedConsts::StatusLed::Provisioned::kOff_ms);
 	}
 #endif
 }
@@ -562,6 +459,7 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 {
 	AppEvent buttonEvent;
 	buttonEvent.Type = AppEventType::Button;
+	uint32_t buttonMask;
 
 	if (FUNCTION_BUTTON_MASK & buttonState & hasChanged) {
 		buttonEvent.ButtonEvent.PinNo = FUNCTION_BUTTON;
@@ -574,32 +472,50 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 		buttonEvent.Handler = ButtonReleaseHandler;
 		PostEvent(buttonEvent);
 	}
-
-#if NUMBER_OF_BUTTONS == 2
-	uint32_t buttonMask = BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON_MASK;
-	buttonEvent.ButtonEvent.PinNo = BLE_ADVERTISEMENT_START_AND_SWITCH_BUTTON;
-#else
-	uint32_t buttonMask = DIMMER_SWITCH_BUTTON_1_MASK;
-	buttonEvent.ButtonEvent.PinNo = DIMMER_SWITCH_BUTTON_1;
-#endif
-
-	if (buttonMask & buttonState & hasChanged) {
-		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonPushed);
-		buttonEvent.Handler = ButtonPushHandler;
-		PostEvent(buttonEvent);
-	} else if (buttonMask & hasChanged) {
-		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
-		buttonEvent.Handler = ButtonReleaseHandler;
-		PostEvent(buttonEvent);
-	}
-
 	buttonMask = ONOFF_SWITCH_BUTTON_1_MASK;
 	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_1;
 
 	if (ONOFF_SWITCH_BUTTON_1_MASK & buttonState & hasChanged) {
-		//LOG_DBG("ONOFF_SWITCH_BUTTON_1 press");
+		LOG_DBG("ONOFF_SWITCH_BUTTON_1 press");
 	} else if (ONOFF_SWITCH_BUTTON_1_MASK & hasChanged) {
-		//LOG_DBG("ONOFF_SWITCH_BUTTON_1 release");
+		LOG_DBG("ONOFF_SWITCH_BUTTON_1 release");
+		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+		buttonEvent.Handler = LightingActionEventHandler;
+		PostEvent(buttonEvent);
+	}
+
+
+	buttonMask = ONOFF_SWITCH_BUTTON_2_MASK;
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_2;
+
+	if (ONOFF_SWITCH_BUTTON_2_MASK & buttonState & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_2 press");
+	} else if (ONOFF_SWITCH_BUTTON_2_MASK & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_2 release");
+		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+		buttonEvent.Handler = LightingActionEventHandler;
+		PostEvent(buttonEvent);
+	}
+
+	buttonMask = ONOFF_SWITCH_BUTTON_3_MASK;
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_3;
+
+	if (ONOFF_SWITCH_BUTTON_3_MASK & buttonState & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_3 press");
+	} else if (ONOFF_SWITCH_BUTTON_3_MASK & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_3 release");
+		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+		buttonEvent.Handler = LightingActionEventHandler;
+		PostEvent(buttonEvent);
+	}
+
+	buttonMask = ONOFF_SWITCH_BUTTON_4_MASK;
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_4;
+
+	if (ONOFF_SWITCH_BUTTON_4_MASK & buttonState & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_4 press");
+	} else if (ONOFF_SWITCH_BUTTON_4_MASK & hasChanged) {
+		LOG_DBG("ONOFF_SWITCH_BUTTON_4 release");
 		buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
 		buttonEvent.Handler = LightingActionEventHandler;
 		PostEvent(buttonEvent);
@@ -612,12 +528,6 @@ void AppTask::StartTimer(Timer timer, uint32_t timeoutMs)
 	case Timer::Function:
 		k_timer_start(&sFunctionTimer, K_MSEC(timeoutMs), K_NO_WAIT);
 		break;
-	case Timer::DimmerTrigger:
-		k_timer_start(&sDimmerPressKeyTimer, K_MSEC(timeoutMs), K_NO_WAIT);
-		break;
-	case Timer::Dimmer:
-		k_timer_start(&sDimmerTimer, K_MSEC(timeoutMs), K_MSEC(timeoutMs));
-		break;
 	default:
 		break;
 	}
@@ -629,12 +539,6 @@ void AppTask::CancelTimer(Timer timer)
 	case Timer::Function:
 		k_timer_stop(&sFunctionTimer);
 		break;
-	case Timer::DimmerTrigger:
-		k_timer_stop(&sDimmerPressKeyTimer);
-		break;
-	case Timer::Dimmer:
-		k_timer_stop(&sDimmerTimer);
-		break;
 	default:
 		break;
 	}
@@ -644,33 +548,6 @@ void AppTask::UpdateLedStateEventHandler(const AppEvent &event)
 {
 	if (event.Type == AppEventType::UpdateLedState) {
 		event.UpdateLedStateEvent.LedWidget->UpdateState();
-	}
-}
-
-void AppTask::ActionInitiated(PWMDevice::Action_t action, int32_t actor)
-{
-	if (action == PWMDevice::ON_ACTION) {
-		LOG_INF("Turn On Action has been initiated");
-	} else if (action == PWMDevice::OFF_ACTION) {
-		LOG_INF("Turn Off Action has been initiated");
-	} else if (action == PWMDevice::LEVEL_ACTION) {
-		LOG_INF("Level Action has been initiated");
-	}
-}
-
-void AppTask::ActionCompleted(PWMDevice::Action_t action, int32_t actor)
-{
-	if (action == PWMDevice::ON_ACTION) {
-		LOG_INF("Turn On Action has been completed");
-	} else if (action == PWMDevice::OFF_ACTION) {
-		LOG_INF("Turn Off Action has been completed");
-	} else if (action == PWMDevice::LEVEL_ACTION) {
-		LOG_INF("Level Action has been completed");
-	}
-
-	if (actor == static_cast<int32_t>(AppEventType::Button)) {
-		/* TODO: enable 2nd PWM and use pin number as button event actor */
-		Instance().UpdateClusterState(DIMMER_SWITCH_BUTTON_1);
 	}
 }
 
@@ -705,20 +582,6 @@ void AppTask::FunctionTimerTimeoutCallback(k_timer *timer)
 		event.Handler = TimerEventHandler;
 		PostEvent(event);
 	}
-	if (timer == &sDimmerPressKeyTimer) {
-		event.Type = AppEventType::Timer;
-		event.TimerEvent.TimerType = (uint8_t)Timer::DimmerTrigger;
-		event.TimerEvent.Context = k_timer_user_data_get(timer);
-		event.Handler = TimerEventHandler;
-		PostEvent(event);
-	}
-	if (timer == &sDimmerTimer) {
-		event.Type = AppEventType::Timer;
-		event.TimerEvent.TimerType = (uint8_t)Timer::Dimmer;
-		event.TimerEvent.Context = k_timer_user_data_get(timer);
-		event.Handler = TimerEventHandler;
-		PostEvent(event);
-	}
 }
 
 void AppTask::PostEvent(const AppEvent &event)
@@ -741,7 +604,6 @@ void AppTask::UpdateClusterState(chip::EndpointId aEndpointId)
 {
 	EmberAfStatus cluster_status;
 	bool onoff;
-	app::DataModel::Nullable<uint8_t> level;
 
 	cluster_status = Clusters::OnOff::Attributes::OnOff::Get(aEndpointId, &onoff);
 	if (cluster_status == EMBER_ZCL_STATUS_SUCCESS) {
@@ -759,22 +621,8 @@ void AppTask::UpdateClusterState(chip::EndpointId aEndpointId)
 			});
 			return;
 		}
-	}
-	cluster_status = Clusters::LevelControl::Attributes::CurrentLevel::Get(aEndpointId, level);
-	if (cluster_status == EMBER_ZCL_STATUS_SUCCESS) {
-		SystemLayer().ScheduleLambda([this, aEndpointId] {
-			/* write the new on/off value */
-			EmberAfStatus status =
-				Clusters::OnOff::Attributes::OnOff::Set(aEndpointId, mPWMDevice.IsTurnedOn());
-			if (status != EMBER_ZCL_STATUS_SUCCESS) {
-				LOG_ERR("Updating on/off cluster failed: %x", status);
-			}
-			/* write the current level */
-			status = Clusters::LevelControl::Attributes::CurrentLevel::Set(aEndpointId, mPWMDevice.GetLevel());
-			if (status != EMBER_ZCL_STATUS_SUCCESS) {
-				LOG_ERR("Updating level cluster failed: %x", status);
-			}
-		});
+	} else {
+		LOG_ERR("Get on/off cluster failed: %x", cluster_status);
 	}
 }
 

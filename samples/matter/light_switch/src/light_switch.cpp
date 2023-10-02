@@ -53,26 +53,6 @@ void LightSwitch::InitiateActionSwitch(Action mAction)
 	}
 }
 
-void LightSwitch::DimmerChangeBrightness()
-{
-	static uint16_t sBrightness;
-	BindingHandler::BindingData *data = Platform::New<BindingHandler::BindingData>();
-	if (data) {
-		data->EndpointId = mLightSwitchEndpoint;
-		data->CommandId = Clusters::LevelControl::Commands::MoveToLevel::Id;
-		data->ClusterId = Clusters::LevelControl::Id;
-		/* add to brightness 3 to approximate 1% step of brightness after each call dimmer change. */
-		sBrightness += kOnePercentBrightnessApproximation;
-		if (sBrightness > kMaximumBrightness) {
-			sBrightness = 0;
-		}
-		data->Value = (uint8_t)sBrightness;
-		data->IsGroup = BindingHandler::GetInstance().IsGroupBound();
-		DeviceLayer::PlatformMgr().ScheduleWork(BindingHandler::SwitchWorkerHandler,
-							reinterpret_cast<intptr_t>(data));
-	}
-}
-
 void LightSwitch::OnDeviceConnectedFn(void * context, Messaging::ExchangeManager & exchangeMgr,
                                          const SessionHandle & sessionHandle)
 {
@@ -106,25 +86,6 @@ void LightSwitch::OnDeviceConnectedFn(void * context, Messaging::ExchangeManager
 		}
 	};
 
-	auto onCurrentLevelCb = [lightSwitch](const app::ConcreteDataAttributePath & attributePath, const auto & dataResponse) {
-		ClusterId clusterId = attributePath.mClusterId;
-		uint8_t responseValue;
-#ifdef CONFIG_CHIP_NUS
-		static char buffer[20];
-#endif
-
-		if (clusterId == Clusters::LevelControl::Id) {
-			if (!dataResponse.IsNull()) {
-				responseValue = dataResponse.Value();
-				ChipLogError(NotSpecified, "EP:%u level:%u", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId(), responseValue);
-#ifdef CONFIG_CHIP_NUS
-				sprintf(buffer, "EP:%u level:%u", (LightSwitch *)lightSwitch->GetLightSwitchEndpointId(), responseValue);
-				GetNUSService().SendData(buffer, sizeof(buffer));
-#endif
-			}
-		}
-	};
-
 	auto onFailureCb = [](const app::ConcreteDataAttributePath * attributePath, CHIP_ERROR error) {
 		ChipLogError(NotSpecified, "Update attribute failed: %" CHIP_ERROR_FORMAT, error.Format());
 	};
@@ -141,14 +102,6 @@ void LightSwitch::OnDeviceConnectedFn(void * context, Messaging::ExchangeManager
 					ret = Controller::SubscribeAttribute<Clusters::OnOff::Attributes::OnOff::TypeInfo>(& exchangeMgr,
 											sessionHandle, entry.remote, onOnOffCb, onFailureCb,
 											0, 20, onSubscriptionEstablishedCb, nullptr, false, true);
-					if (CHIP_NO_ERROR != ret) {
-						ChipLogError(NotSpecified, "Subscribe Command Request ERROR: %s", ErrorStr(ret));
-					}
-				} else if (entry.clusterId == Clusters::LevelControl::Id) {
-					ChipLogError(NotSpecified, "Subscribe level attribute of EP: %u", entry.remote, (int)sessionHandle->GetPeer().GetNodeId());
-					ret = Controller::SubscribeAttribute<Clusters::LevelControl::Attributes::CurrentLevel::TypeInfo>(& exchangeMgr,
-											sessionHandle, entry.remote, onCurrentLevelCb, onFailureCb,
-											3, 20, onSubscriptionEstablishedCb, nullptr, false, true);
 					if (CHIP_NO_ERROR != ret) {
 						ChipLogError(NotSpecified, "Subscribe Command Request ERROR: %s", ErrorStr(ret));
 					}
