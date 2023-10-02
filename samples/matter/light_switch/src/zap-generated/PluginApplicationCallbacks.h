@@ -20,8 +20,9 @@
 #pragma once
 
 void MatterIdentifyPluginServerInitCallback();
+void MatterGroupsPluginServerInitCallback();
+void MatterScenesPluginServerInitCallback();
 void MatterOnOffPluginServerInitCallback();
-void MatterLevelControlPluginServerInitCallback();
 void MatterDescriptorPluginServerInitCallback();
 void MatterBindingPluginServerInitCallback();
 void MatterAccessControlPluginServerInitCallback();
@@ -33,16 +34,15 @@ void MatterGeneralDiagnosticsPluginServerInitCallback();
 void MatterSoftwareDiagnosticsPluginServerInitCallback();
 void MatterThreadNetworkDiagnosticsPluginServerInitCallback();
 void MatterWiFiNetworkDiagnosticsPluginServerInitCallback();
-void MatterSwitchPluginServerInitCallback();
 void MatterAdministratorCommissioningPluginServerInitCallback();
 void MatterOperationalCredentialsPluginServerInitCallback();
 void MatterGroupKeyManagementPluginServerInitCallback();
-void MatterFixedLabelPluginServerInitCallback();
 
 #define MATTER_PLUGINS_INIT                                                                                            \
 	MatterIdentifyPluginServerInitCallback();                                                                      \
+	MatterGroupsPluginServerInitCallback();                                                                        \
+	MatterScenesPluginServerInitCallback();                                                                        \
 	MatterOnOffPluginServerInitCallback();                                                                         \
-	MatterLevelControlPluginServerInitCallback();                                                                  \
 	MatterDescriptorPluginServerInitCallback();                                                                    \
 	MatterBindingPluginServerInitCallback();                                                                       \
 	MatterAccessControlPluginServerInitCallback();                                                                 \
@@ -54,8 +54,6 @@ void MatterFixedLabelPluginServerInitCallback();
 	MatterSoftwareDiagnosticsPluginServerInitCallback();                                                           \
 	MatterThreadNetworkDiagnosticsPluginServerInitCallback();                                                      \
 	MatterWiFiNetworkDiagnosticsPluginServerInitCallback();                                                        \
-	MatterSwitchPluginServerInitCallback();                                                                        \
 	MatterAdministratorCommissioningPluginServerInitCallback();                                                    \
 	MatterOperationalCredentialsPluginServerInitCallback();                                                        \
-	MatterGroupKeyManagementPluginServerInitCallback();                                                            \
-	MatterFixedLabelPluginServerInitCallback();
+	MatterGroupKeyManagementPluginServerInitCallback();

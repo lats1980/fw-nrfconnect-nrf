@@ -52,16 +52,6 @@ namespace Controller
 		~OnOffCluster() {}
 	};
 
-	class DLL_EXPORT LevelControlCluster : public ClusterBase {
-	public:
-		LevelControlCluster(Messaging::ExchangeManager &exchangeManager, const SessionHandle &session,
-				    EndpointId endpoint)
-			: ClusterBase(exchangeManager, session, endpoint)
-		{
-		}
-		~LevelControlCluster() {}
-	};
-
 	class DLL_EXPORT OtaSoftwareUpdateProviderCluster : public ClusterBase {
 	public:
 		OtaSoftwareUpdateProviderCluster(Messaging::ExchangeManager &exchangeManager,
