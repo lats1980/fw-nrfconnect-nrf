@@ -448,10 +448,6 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 void AppTask::UpdateStatusLED()
 {
 #ifdef CONFIG_STATE_LEDS
-#if NUMBER_OF_LEDS == 4
-	sFactoryResetLEDs.Set(false);
-#endif
-
 	/* Update the status LED.
 	 *
 	 * If IPv6 network and service provisioned, keep the LED on constantly.

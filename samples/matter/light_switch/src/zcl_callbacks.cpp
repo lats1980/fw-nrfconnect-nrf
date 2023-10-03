@@ -69,17 +69,27 @@ void emberAfOnOffClusterInitCallback(EndpointId endpoint)
 	EmberAfStatus status;
 	bool storedValue;
 	LightSwitch* lightSwitch;
+	RelayWidget* relay;
 
-	//ChipLogProgress(Zcl, "emberAfOnOffClusterInitCallback: %u", endpoint);
+	ChipLogProgress(Zcl, "emberAfOnOffClusterInitCallback: %u", endpoint);
 	lightSwitch = AppTask::Instance().GetSwitchByEndPoint(endpoint);
-	if (lightSwitch == nullptr) {
+	if (lightSwitch != nullptr) {
+		/* Read storedValue on/off value */
+		status = Attributes::OnOff::Get(endpoint, &storedValue);
+		if (status == EMBER_ZCL_STATUS_SUCCESS) {
+			if (lightSwitch->GetLED()) {
+				lightSwitch->GetLED()->Set(storedValue);
+			}
+		}
 		return;
 	}
-	/* Read storedValue on/off value */
-	status = Attributes::OnOff::Get(endpoint, &storedValue);
-	if (status == EMBER_ZCL_STATUS_SUCCESS) {
-		if (lightSwitch->GetLED()) {
-			lightSwitch->GetLED()->Set(storedValue);
+	relay = AppTask::Instance().GetRelayByEndPoint(endpoint);
+	if (relay != nullptr) {
+		/* Read storedValue on/off value */
+		status = Attributes::OnOff::Get(endpoint, &storedValue);
+		if (status == EMBER_ZCL_STATUS_SUCCESS) {
+			relay->Set(storedValue);
 		}
+		return;
 	}
 }
