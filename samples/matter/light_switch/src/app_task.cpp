@@ -61,9 +61,13 @@ namespace
 constexpr uint32_t kFactoryResetTriggerTimeout = 3000;
 constexpr uint32_t kFactoryResetCancelWindowTimeout = 3000;
 constexpr size_t kAppEventQueueSize = 10;
+constexpr EndpointId kOnOffRelayEndpointId_1 = 1;
 constexpr EndpointId kOnOffLightEndpointId_1 = 3;
+constexpr EndpointId kOnOffRelayEndpointId_2 = 4;
 constexpr EndpointId kOnOffLightEndpointId_2 = 6;
+constexpr EndpointId kOnOffRelayEndpointId_3 = 7;
 constexpr EndpointId kOnOffLightEndpointId_3 = 9;
+constexpr EndpointId kOnOffRelayEndpointId_4 = 10;
 constexpr EndpointId kOnOffLightEndpointId_4 = 12;
 constexpr EndpointId kLightEndpointId = 1;
 
@@ -165,6 +169,7 @@ CHIP_ERROR AppTask::Init()
 	/* Initialize LEDs */
 	LEDWidget::InitGpio();
 	LEDWidget::SetStateUpdateCallback(LEDStateUpdateHandler);
+	RelayWidget::InitGpio();
 
 	sOnOffLED_1.Init(ONOFF_SWITCH_LED_1);
 	sOnOffLED_2.Init(ONOFF_SWITCH_LED_2);
@@ -176,6 +181,17 @@ CHIP_ERROR AppTask::Init()
 	mSwitch[1].SetLED(&sOnOffLED_2);
 	mSwitch[2].SetLED(&sOnOffLED_3);
 	mSwitch[3].SetLED(&sOnOffLED_4);
+#if defined (NRF52840_XXAA)
+	mRelay[0].Init(kOnOffRelayEndpointId_1, 5);
+	mRelay[1].Init(kOnOffRelayEndpointId_2, 6);
+	mRelay[2].Init(kOnOffRelayEndpointId_3, 7);
+	mRelay[3].Init(kOnOffRelayEndpointId_4, 8);
+#elif defined (NRF5340_XXAA)
+	mRelay[0].Init(kOnOffRelayEndpointId_1, 6);
+	mRelay[1].Init(kOnOffRelayEndpointId_2, 7);
+	mRelay[2].Init(kOnOffRelayEndpointId_3, 8);
+	mRelay[3].Init(kOnOffRelayEndpointId_4, 9);
+#endif
 
 	UpdateStatusLED();
 
@@ -641,6 +657,16 @@ LightSwitch* AppTask::GetSwitchByPin(uint32_t aGpioPin)
 	for (int i = 0; i < NUMBER_OF_SWITCH; i++) {
 		if (mSwitch[i].GetGpioPin() == aGpioPin) {
 			return &mSwitch[i];
+		}
+	}
+	return nullptr;
+}
+
+RelayWidget* AppTask::GetRelayByEndPoint(chip::EndpointId aEndpointId)
+{
+	for (int i = 0; i < NUMBER_OF_RELAY; i++) {
+		if (mRelay[i].GetRelayEndpointId() == aEndpointId) {
+			return &mRelay[i];
 		}
 	}
 	return nullptr;

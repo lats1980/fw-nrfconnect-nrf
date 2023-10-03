@@ -8,6 +8,7 @@
 
 #include "app_task.h"
 #include "light_switch.h"
+#include "relay_widget.h"
 
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app-common/zap-generated/ids/Attributes.h>
@@ -25,18 +26,26 @@ void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &a
 	AttributeId attributeId = attributePath.mAttributeId;
 	EndpointId endpointId = attributePath.mEndpointId;
 	LightSwitch* lightSwitch;
+	RelayWidget* relay;
 
 	ChipLogProgress(Zcl, "MatterPostAttributeChangeCallback: %u %u %u", endpointId, clusterId, attributeId);
 	lightSwitch = AppTask::Instance().GetSwitchByEndPoint(endpointId);
-	if (lightSwitch == nullptr) {
+	if (lightSwitch != nullptr) {
+		if (clusterId == OnOff::Id && attributeId == OnOff::Attributes::OnOff::Id) {
+			ChipLogProgress(Zcl, "Cluster OnOff: attribute OnOff set to %" PRIu8 "", *value);
+			if (lightSwitch->GetLED()) {
+				lightSwitch->GetLED()->Set(*value);
+			}
+		}
 		return;
 	}
-
-	if (clusterId == OnOff::Id && attributeId == OnOff::Attributes::OnOff::Id) {
-		ChipLogProgress(Zcl, "Cluster OnOff: attribute OnOff set to %" PRIu8 "", *value);
-		if (lightSwitch->GetLED()) {
-			lightSwitch->GetLED()->Set(*value);
+	relay = AppTask::Instance().GetRelayByEndPoint(endpointId);
+	if (relay != nullptr) {
+		if (clusterId == OnOff::Id && attributeId == OnOff::Attributes::OnOff::Id) {
+			ChipLogProgress(Zcl, "Cluster OnOff: attribute OnOff set to %" PRIu8 "", *value);
+			relay->Set(*value);
 		}
+		return;
 	}
 }
 

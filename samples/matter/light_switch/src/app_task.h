@@ -9,6 +9,7 @@
 #include "app_event.h"
 #include "led_widget.h"
 #include "light_switch.h"
+#include "relay_widget.h"
 
 #include <platform/CHIPDeviceLayer.h>
 
@@ -27,6 +28,7 @@
 #endif
 
 #define NUMBER_OF_SWITCH 4
+#define NUMBER_OF_RELAY 4
 
 using namespace std;
 
@@ -46,6 +48,7 @@ public:
 	void UpdateClusterState(chip::EndpointId aEndpointId);
 	LightSwitch* GetSwitchByEndPoint(chip::EndpointId aEndpointId);
 	LightSwitch* GetSwitchByPin(uint32_t aGpioPin);
+	RelayWidget* GetRelayByEndPoint(chip::EndpointId aEndpointId);
 
 	static void IdentifyStartHandler(Identify *);
 	static void IdentifyStopHandler(Identify *);
@@ -80,6 +83,7 @@ private:
 
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
 	LightSwitch mSwitch[NUMBER_OF_SWITCH];
+	RelayWidget mRelay[NUMBER_OF_RELAY];
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
 #endif

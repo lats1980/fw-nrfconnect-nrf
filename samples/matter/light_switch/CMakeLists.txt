@@ -44,8 +44,9 @@ target_compile_options(app PRIVATE -Wno-deprecated-declarations)
 target_sources(app PRIVATE
     src/app_task.cpp
     src/light_switch.cpp
+    src/relay_widget.cpp
     src/main.cpp
-src/zcl_callbacks.cpp
+    src/zcl_callbacks.cpp
     src/binding_handler.cpp
     src/shell_commands.cpp
     ${COMMON_ROOT}/src/led_widget.cpp
