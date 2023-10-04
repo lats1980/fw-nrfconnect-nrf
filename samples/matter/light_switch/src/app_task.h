@@ -78,6 +78,17 @@ private:
 	static void StartTimer(Timer, uint32_t);
 	static void CancelTimer(Timer);
 
+#ifdef CONFIG_CHIP_NUS
+	static void NUSToggle1Callback(void *context);
+	static void NUSToggle2Callback(void *context);
+	static void NUSToggle3Callback(void *context);
+	static void NUSToggle4Callback(void *context);
+	static void NUSGet1Callback(void *context);
+	static void NUSGet2Callback(void *context);
+	static void NUSGet3Callback(void *context);
+	static void NUSGet4Callback(void *context);
+#endif
+
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
 	LightSwitch mSwitch[CONFIG_NUMBER_OF_SWITCH];
 	RelayWidget mRelay[CONFIG_NUMBER_OF_RELAY];

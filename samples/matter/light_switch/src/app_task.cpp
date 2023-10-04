@@ -221,8 +221,14 @@ CHIP_ERROR AppTask::Init()
 	if (!GetNUSService().Init(kSwitchNUSPriority, kAdvertisingIntervalMin, kAdvertisingIntervalMax)) {
 		ChipLogError(Zcl, "Cannot initialize NUS service");
 	}
-	//GetNUSService().RegisterCommand("Lock", sizeof("Lock"), NUSLockCallback, nullptr);
-	//GetNUSService().RegisterCommand("Unlock", sizeof("Unlock"), NUSUnlockCallback, nullptr);
+	GetNUSService().RegisterCommand("toggle 1", sizeof("toggle 1"), NUSToggle1Callback, nullptr);
+	GetNUSService().RegisterCommand("toggle 2", sizeof("toggle 2"), NUSToggle2Callback, nullptr);
+	GetNUSService().RegisterCommand("toggle 3", sizeof("toggle 3"), NUSToggle3Callback, nullptr);
+	GetNUSService().RegisterCommand("toggle 4", sizeof("toggle 4"), NUSToggle4Callback, nullptr);
+	GetNUSService().RegisterCommand("get 1", sizeof("get 1"), NUSGet1Callback, nullptr);
+	GetNUSService().RegisterCommand("get 2", sizeof("get 2"), NUSGet2Callback, nullptr);
+	GetNUSService().RegisterCommand("get 3", sizeof("get 3"), NUSGet3Callback, nullptr);
+	GetNUSService().RegisterCommand("get 4", sizeof("get 4"), NUSGet4Callback, nullptr);
 	if(!GetNUSService().StartServer()){
 		LOG_ERR("GetNUSService().StartServer() failed");
 	}
@@ -501,7 +507,6 @@ void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 		PostEvent(buttonEvent);
 	}
 
-
 	buttonMask = ONOFF_SWITCH_BUTTON_2_MASK;
 	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_2;
 
@@ -672,3 +677,97 @@ RelayWidget* AppTask::GetRelayByEndPoint(chip::EndpointId aEndpointId)
 	}
 	return nullptr;
 }
+
+#ifdef CONFIG_CHIP_NUS
+void AppTask::NUSToggle1Callback(void *context)
+{
+	AppEvent buttonEvent;
+	buttonEvent.Type = AppEventType::Button;
+
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_1;
+	buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+	buttonEvent.Handler = LightingActionEventHandler;
+	PostEvent(buttonEvent);
+}
+
+void AppTask::NUSToggle2Callback(void *context)
+{
+	AppEvent buttonEvent;
+	buttonEvent.Type = AppEventType::Button;
+
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_2;
+	buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+	buttonEvent.Handler = LightingActionEventHandler;
+	PostEvent(buttonEvent);
+}
+
+void AppTask::NUSToggle3Callback(void *context)
+{
+	AppEvent buttonEvent;
+	buttonEvent.Type = AppEventType::Button;
+
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_3;
+	buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+	buttonEvent.Handler = LightingActionEventHandler;
+	PostEvent(buttonEvent);
+}
+
+void AppTask::NUSToggle4Callback(void *context)
+{
+	AppEvent buttonEvent;
+	buttonEvent.Type = AppEventType::Button;
+
+	buttonEvent.ButtonEvent.PinNo = ONOFF_SWITCH_BUTTON_4;
+	buttonEvent.ButtonEvent.Action = static_cast<uint8_t>(AppEventType::ButtonReleased);
+	buttonEvent.Handler = LightingActionEventHandler;
+	PostEvent(buttonEvent);
+}
+
+void AppTask::NUSGet1Callback(void *context)
+{
+	static char buffer[20];
+
+	if (Instance().GetSwitchByPin(ONOFF_SWITCH_BUTTON_1)->GetLED()->Get()) {
+		sprintf(buffer, "Relay is on");
+	} else {
+		sprintf(buffer, "Relay is off");
+	}
+	GetNUSService().SendData(buffer, sizeof(buffer));
+}
+
+void AppTask::NUSGet2Callback(void *context)
+{
+	static char buffer[20];
+
+	if (Instance().GetSwitchByPin(ONOFF_SWITCH_BUTTON_2)->GetLED()->Get()) {
+		sprintf(buffer, "Switch is on");
+	} else {
+		sprintf(buffer, "Switch is off");
+	}
+	GetNUSService().SendData(buffer, sizeof(buffer));
+}
+
+void AppTask::NUSGet3Callback(void *context)
+{
+	static char buffer[20];
+
+	if (Instance().GetSwitchByPin(ONOFF_SWITCH_BUTTON_3)->GetLED()->Get()) {
+		sprintf(buffer, "Switch is on");
+	} else {
+		sprintf(buffer, "RelSwitchy is off");
+	}
+	GetNUSService().SendData(buffer, sizeof(buffer));
+}
+
+void AppTask::NUSGet4Callback(void *context)
+{
+	static char buffer[20];
+
+	if (Instance().GetSwitchByPin(ONOFF_SWITCH_BUTTON_4)->GetLED()->Get()) {
+		sprintf(buffer, "Relay is on");
+	} else {
+		sprintf(buffer, "Relay is off");
+	}
+	GetNUSService().SendData(buffer, sizeof(buffer));
+}
+#endif
