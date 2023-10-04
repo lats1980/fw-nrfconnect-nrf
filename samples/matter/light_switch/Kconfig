@@ -13,6 +13,14 @@ config STATE_LEDS
 	  the device into a network or the factory reset initiation. Note that setting this option to
 	  'n' does not disable the LED indicating the state of the simulated bolt.
 
+config NUMBER_OF_SWITCH
+	int "Maximum number of switchs supported by lock"
+	default 4
+
+config NUMBER_OF_RELAY
+	int "Maximum number of relays supported by lock"
+	default 4
+
 # Sample configuration used for Thread networking
 if NET_L2_OPENTHREAD
 

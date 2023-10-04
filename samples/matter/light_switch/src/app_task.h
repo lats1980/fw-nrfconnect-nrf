@@ -27,9 +27,6 @@
 #include "icd_util.h"
 #endif
 
-#define NUMBER_OF_SWITCH 4
-#define NUMBER_OF_RELAY 4
-
 using namespace std;
 
 struct k_timer;
@@ -82,8 +79,8 @@ private:
 	static void CancelTimer(Timer);
 
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
-	LightSwitch mSwitch[NUMBER_OF_SWITCH];
-	RelayWidget mRelay[NUMBER_OF_RELAY];
+	LightSwitch mSwitch[CONFIG_NUMBER_OF_SWITCH];
+	RelayWidget mRelay[CONFIG_NUMBER_OF_RELAY];
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
 #endif

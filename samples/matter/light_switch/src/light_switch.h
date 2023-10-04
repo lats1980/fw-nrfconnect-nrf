@@ -12,6 +12,7 @@
 #include <atomic>
 
 #include "led_widget.h"
+#include "relay_widget.h"
 
 using namespace chip;
 
@@ -39,6 +40,8 @@ public:
 	uint32_t GetGpioPin() { return mGpioPin; }
 	void SetLED(LEDWidget *aLED) { mLED = aLED; }
 	LEDWidget* GetLED() { return mLED; }
+	void SetRelay(RelayWidget *aRelay) { mRelay = aRelay; }
+	RelayWidget* GetRelay() { return mRelay; }
 	void SubscribeAttribute();
 
 private:
@@ -54,4 +57,5 @@ private:
 	chip::EndpointId mLightSwitchEndpoint;
 	uint32_t mGpioPin;
 	LEDWidget *mLED;
+	RelayWidget *mRelay;
 };

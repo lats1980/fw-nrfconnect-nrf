@@ -26,7 +26,6 @@ void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &a
 	AttributeId attributeId = attributePath.mAttributeId;
 	EndpointId endpointId = attributePath.mEndpointId;
 	LightSwitch* lightSwitch;
-	RelayWidget* relay;
 
 	ChipLogProgress(Zcl, "MatterPostAttributeChangeCallback: %u %u %u", endpointId, clusterId, attributeId);
 	lightSwitch = AppTask::Instance().GetSwitchByEndPoint(endpointId);
@@ -36,14 +35,9 @@ void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &a
 			if (lightSwitch->GetLED()) {
 				lightSwitch->GetLED()->Set(*value);
 			}
-		}
-		return;
-	}
-	relay = AppTask::Instance().GetRelayByEndPoint(endpointId);
-	if (relay != nullptr) {
-		if (clusterId == OnOff::Id && attributeId == OnOff::Attributes::OnOff::Id) {
-			ChipLogProgress(Zcl, "Cluster OnOff: attribute OnOff set to %" PRIu8 "", *value);
-			relay->Set(*value);
+			if (lightSwitch->GetRelay()) {
+				lightSwitch->GetRelay()->Set(*value);
+			}
 		}
 		return;
 	}
@@ -81,15 +75,13 @@ void emberAfOnOffClusterInitCallback(EndpointId endpoint)
 				lightSwitch->GetLED()->Set(storedValue);
 			}
 		}
-		return;
-	}
-	relay = AppTask::Instance().GetRelayByEndPoint(endpoint);
-	if (relay != nullptr) {
-		/* Read storedValue on/off value */
-		status = Attributes::OnOff::Get(endpoint, &storedValue);
-		if (status == EMBER_ZCL_STATUS_SUCCESS) {
-			relay->Set(storedValue);
+		relay = AppTask::Instance().GetRelayByEndPoint(endpoint);
+		if (relay != nullptr) {
+			/* Read storedValue on/off value */
+			status = Attributes::OnOff::Get(endpoint, &storedValue);
+			if (status == EMBER_ZCL_STATUS_SUCCESS) {
+				relay->Set(storedValue);
+			}
 		}
-		return;
 	}
 }

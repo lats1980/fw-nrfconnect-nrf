@@ -62,13 +62,9 @@ constexpr uint32_t kFactoryResetTriggerTimeout = 3000;
 constexpr uint32_t kFactoryResetCancelWindowTimeout = 3000;
 constexpr size_t kAppEventQueueSize = 10;
 constexpr EndpointId kOnOffRelayEndpointId_1 = 1;
-constexpr EndpointId kOnOffLightEndpointId_1 = 3;
-constexpr EndpointId kOnOffRelayEndpointId_2 = 4;
-constexpr EndpointId kOnOffLightEndpointId_2 = 6;
-constexpr EndpointId kOnOffRelayEndpointId_3 = 7;
-constexpr EndpointId kOnOffLightEndpointId_3 = 9;
-constexpr EndpointId kOnOffRelayEndpointId_4 = 10;
-constexpr EndpointId kOnOffLightEndpointId_4 = 12;
+constexpr EndpointId kOnOffRelayEndpointId_2 = 2;
+constexpr EndpointId kOnOffRelayEndpointId_3 = 3;
+constexpr EndpointId kOnOffRelayEndpointId_4 = 4;
 constexpr EndpointId kLightEndpointId = 1;
 
 #ifdef CONFIG_CHIP_NUS
@@ -160,10 +156,10 @@ CHIP_ERROR AppTask::Init()
 	return CHIP_ERROR_INTERNAL;
 #endif /* CONFIG_NET_L2_OPENTHREAD */
 
-	mSwitch[0].Init(kOnOffLightEndpointId_1, ONOFF_SWITCH_BUTTON_1);
-	mSwitch[1].Init(kOnOffLightEndpointId_2, ONOFF_SWITCH_BUTTON_2);
-	mSwitch[2].Init(kOnOffLightEndpointId_3, ONOFF_SWITCH_BUTTON_3);
-	mSwitch[3].Init(kOnOffLightEndpointId_4, ONOFF_SWITCH_BUTTON_4);
+	mSwitch[0].Init(kOnOffRelayEndpointId_1, ONOFF_SWITCH_BUTTON_1);
+	mSwitch[1].Init(kOnOffRelayEndpointId_2, ONOFF_SWITCH_BUTTON_2);
+	mSwitch[2].Init(kOnOffRelayEndpointId_3, ONOFF_SWITCH_BUTTON_3);
+	mSwitch[3].Init(kOnOffRelayEndpointId_4, ONOFF_SWITCH_BUTTON_4);
 	BindingHandler::GetInstance().Init();
 
 	/* Initialize LEDs */
@@ -182,17 +178,26 @@ CHIP_ERROR AppTask::Init()
 	mSwitch[2].SetLED(&sOnOffLED_3);
 	mSwitch[3].SetLED(&sOnOffLED_4);
 #if defined (NRF52840_XXAA)
-	mRelay[0].Init(kOnOffRelayEndpointId_1, 5);
-	mRelay[1].Init(kOnOffRelayEndpointId_2, 6);
-	mRelay[2].Init(kOnOffRelayEndpointId_3, 7);
-	mRelay[3].Init(kOnOffRelayEndpointId_4, 8);
-#elif defined (NRF5340_XXAA)
-	mRelay[0].Init(kOnOffRelayEndpointId_1, 6);
+	mRelay[0].Init(kOnOffRelayEndpointId_1, 8);
 	mRelay[1].Init(kOnOffRelayEndpointId_2, 7);
-	mRelay[2].Init(kOnOffRelayEndpointId_3, 8);
-	mRelay[3].Init(kOnOffRelayEndpointId_4, 9);
+#if CONFIG_NUMBER_OF_RELAY == 4
+	mRelay[2].Init(kOnOffRelayEndpointId_3, 6);
+	mRelay[3].Init(kOnOffRelayEndpointId_4, 5);
 #endif
-
+#elif defined (NRF5340_XXAA)
+	mRelay[0].Init(kOnOffRelayEndpointId_1, 9);
+	mRelay[1].Init(kOnOffRelayEndpointId_2, 8);
+#if CONFIG_NUMBER_OF_RELAY == 4
+	mRelay[2].Init(kOnOffRelayEndpointId_3, 7);
+	mRelay[3].Init(kOnOffRelayEndpointId_4, 6);
+#endif
+#endif
+	mSwitch[0].SetRelay(&mRelay[0]);
+	mSwitch[1].SetRelay(&mRelay[1]);
+#if CONFIG_NUMBER_OF_RELAY == 4
+	mSwitch[2].SetRelay(&mRelay[2]);
+	mSwitch[3].SetRelay(&mRelay[3]);
+#endif
 	UpdateStatusLED();
 
 	/* Initialize buttons */
@@ -565,7 +570,7 @@ void AppTask::UpdateLedStateEventHandler(const AppEvent &event)
 
 void AppTask::BindingChangedEventHandler(const AppEvent &event)
 {
-	for (int i = 1; i < NUMBER_OF_SWITCH; i++) {
+	for (int i = 1; i < CONFIG_NUMBER_OF_SWITCH; i++) {
 		Instance().GetSwitchByEndPoint(i)->SubscribeAttribute();
 		k_sleep(K_MSEC(3000));
 	}
@@ -627,7 +632,7 @@ void AppTask::UpdateClusterState(chip::EndpointId aEndpointId)
 						Clusters::OnOff::Attributes::OnOff::Set(aEndpointId, Instance().GetSwitchByEndPoint(aEndpointId)->GetLED()->Get());
 
 					if (status != EMBER_ZCL_STATUS_SUCCESS) {
-						LOG_ERR("Updating on/off cluster failed: %x", status);
+						LOG_ERR("Updating on/off cluster %d failed: %x", aEndpointId, status);
 					}
 				}
 			});
@@ -640,7 +645,7 @@ void AppTask::UpdateClusterState(chip::EndpointId aEndpointId)
 
 LightSwitch* AppTask::GetSwitchByEndPoint(chip::EndpointId aEndpointId)
 {
-	for (int i = 0; i < NUMBER_OF_SWITCH; i++) {
+	for (int i = 0; i < CONFIG_NUMBER_OF_SWITCH; i++) {
 		if (mSwitch[i].GetLightSwitchEndpointId() == aEndpointId) {
 			return &mSwitch[i];
 		}
@@ -650,7 +655,7 @@ LightSwitch* AppTask::GetSwitchByEndPoint(chip::EndpointId aEndpointId)
 
 LightSwitch* AppTask::GetSwitchByPin(uint32_t aGpioPin)
 {
-	for (int i = 0; i < NUMBER_OF_SWITCH; i++) {
+	for (int i = 0; i < CONFIG_NUMBER_OF_SWITCH; i++) {
 		if (mSwitch[i].GetGpioPin() == aGpioPin) {
 			return &mSwitch[i];
 		}
@@ -660,7 +665,7 @@ LightSwitch* AppTask::GetSwitchByPin(uint32_t aGpioPin)
 
 RelayWidget* AppTask::GetRelayByEndPoint(chip::EndpointId aEndpointId)
 {
-	for (int i = 0; i < NUMBER_OF_RELAY; i++) {
+	for (int i = 0; i < CONFIG_NUMBER_OF_RELAY; i++) {
 		if (mRelay[i].GetRelayEndpointId() == aEndpointId) {
 			return &mRelay[i];
 		}

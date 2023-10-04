@@ -20,6 +20,7 @@ void RelayWidget::InitGpio()
 		return;
 	}
 #if defined (NRF52840_XXAA)
+#if CONFIG_NUMBER_OF_RELAY == 4
 	err = gpio_pin_configure(gpio_dev, 5, GPIO_OUTPUT | GPIO_ACTIVE_HIGH); 
 	if (err != 0) {
 		printk("Failed to configure pin %d\n", 5);
@@ -30,6 +31,7 @@ void RelayWidget::InitGpio()
 		printk("Failed to configure pin %d\n", 6);
 		return;
 	}
+#endif
 	err = gpio_pin_configure(gpio_dev, 7, GPIO_OUTPUT | GPIO_ACTIVE_HIGH); 
 	if (err != 0) {
 		printk("Failed to configure pin %d\n", 7);
@@ -41,6 +43,7 @@ void RelayWidget::InitGpio()
 		return;
 	}
 #elif defined (NRF5340_XXAA)
+#if CONFIG_NUMBER_OF_RELAY == 4
 	err = gpio_pin_configure(gpio_dev, 6, GPIO_OUTPUT | GPIO_ACTIVE_HIGH); 
 	if (err != 0) {
 		printk("Failed to configure pin %d\n", 6);
@@ -51,22 +54,23 @@ void RelayWidget::InitGpio()
 		printk("Failed to configure pin %d\n", 7);
 		return;
 	}
+#endif
 	err = gpio_pin_configure(gpio_dev, 8, GPIO_OUTPUT | GPIO_ACTIVE_HIGH); 
 	if (err != 0) {
-		printk("Failed to configure pin %d\n", 8);
+		printk("Failed to configure pin %d\n", 9);
 		return;
 	}
 	err = gpio_pin_configure(gpio_dev, 9, GPIO_OUTPUT | GPIO_ACTIVE_HIGH); 
 	if (err != 0) {
-		printk("Failed to configure pin %d\n", 9);
+		printk("Failed to configure pin %d\n", 8);
 		return;
 	}
 #endif
 }
 
-void RelayWidget::Init(chip::EndpointId aLightSwitchEndpoint, uint32_t gpioNum)
+void RelayWidget::Init(chip::EndpointId aRelayEndpoint, uint32_t gpioNum)
 {
-	mRelayEndpoint = aLightSwitchEndpoint;
+	mRelayEndpoint = aRelayEndpoint;
 	mGPIONum = gpioNum;
 	Set(false);
 }
