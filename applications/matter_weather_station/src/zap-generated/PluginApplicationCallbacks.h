@@ -20,6 +20,9 @@
 #pragma once
 
 void MatterIdentifyPluginServerInitCallback();
+void MatterGroupsPluginServerInitCallback();
+void MatterScenesPluginServerInitCallback();
+void MatterOnOffPluginServerInitCallback();
 void MatterDescriptorPluginServerInitCallback();
 void MatterAccessControlPluginServerInitCallback();
 void MatterBasicInformationPluginServerInitCallback();
@@ -39,6 +42,9 @@ void MatterRelativeHumidityMeasurementPluginServerInitCallback();
 
 #define MATTER_PLUGINS_INIT                                                                                            \
 	MatterIdentifyPluginServerInitCallback();                                                                      \
+	MatterGroupsPluginServerInitCallback();                                                                        \
+	MatterScenesPluginServerInitCallback();                                                                        \
+	MatterOnOffPluginServerInitCallback();                                                                         \
 	MatterDescriptorPluginServerInitCallback();                                                                    \
 	MatterAccessControlPluginServerInitCallback();                                                                 \
 	MatterBasicInformationPluginServerInitCallback();                                                              \

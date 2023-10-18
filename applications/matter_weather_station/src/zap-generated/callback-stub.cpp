@@ -49,6 +49,9 @@ void emberAfClusterInitCallback(EndpointId endpoint, ClusterId clusterId)
 	case app::Clusters::GroupKeyManagement::Id:
 		emberAfGroupKeyManagementClusterInitCallback(endpoint);
 		break;
+	case app::Clusters::Groups::Id:
+		emberAfGroupsClusterInitCallback(endpoint);
+		break;
 	case app::Clusters::Identify::Id:
 		emberAfIdentifyClusterInitCallback(endpoint);
 		break;
@@ -61,6 +64,9 @@ void emberAfClusterInitCallback(EndpointId endpoint, ClusterId clusterId)
 	case app::Clusters::OtaSoftwareUpdateRequestor::Id:
 		emberAfOtaSoftwareUpdateRequestorClusterInitCallback(endpoint);
 		break;
+	case app::Clusters::OnOff::Id:
+		emberAfOnOffClusterInitCallback(endpoint);
+		break;
 	case app::Clusters::OperationalCredentials::Id:
 		emberAfOperationalCredentialsClusterInitCallback(endpoint);
 		break;
@@ -72,6 +78,9 @@ void emberAfClusterInitCallback(EndpointId endpoint, ClusterId clusterId)
 		break;
 	case app::Clusters::RelativeHumidityMeasurement::Id:
 		emberAfRelativeHumidityMeasurementClusterInitCallback(endpoint);
+		break;
+	case app::Clusters::Scenes::Id:
+		emberAfScenesClusterInitCallback(endpoint);
 		break;
 	case app::Clusters::SoftwareDiagnostics::Id:
 		emberAfSoftwareDiagnosticsClusterInitCallback(endpoint);
@@ -123,6 +132,11 @@ void __attribute__((weak)) emberAfGroupKeyManagementClusterInitCallback(Endpoint
 	// To prevent warning
 	(void)endpoint;
 }
+void __attribute__((weak)) emberAfGroupsClusterInitCallback(EndpointId endpoint)
+{
+	// To prevent warning
+	(void)endpoint;
+}
 void __attribute__((weak)) emberAfIdentifyClusterInitCallback(EndpointId endpoint)
 {
 	// To prevent warning
@@ -143,6 +157,11 @@ void __attribute__((weak)) emberAfOtaSoftwareUpdateRequestorClusterInitCallback(
 	// To prevent warning
 	(void)endpoint;
 }
+void __attribute__((weak)) emberAfOnOffClusterInitCallback(EndpointId endpoint)
+{
+	// To prevent warning
+	(void)endpoint;
+}
 void __attribute__((weak)) emberAfOperationalCredentialsClusterInitCallback(EndpointId endpoint)
 {
 	// To prevent warning
@@ -159,6 +178,11 @@ void __attribute__((weak)) emberAfPressureMeasurementClusterInitCallback(Endpoin
 	(void)endpoint;
 }
 void __attribute__((weak)) emberAfRelativeHumidityMeasurementClusterInitCallback(EndpointId endpoint)
+{
+	// To prevent warning
+	(void)endpoint;
+}
+void __attribute__((weak)) emberAfScenesClusterInitCallback(EndpointId endpoint)
 {
 	// To prevent warning
 	(void)endpoint;

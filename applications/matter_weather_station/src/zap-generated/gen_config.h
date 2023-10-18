@@ -21,8 +21,11 @@
 #pragma once
 
 /**** Cluster endpoint counts ****/
-#define EMBER_AF_IDENTIFY_CLUSTER_SERVER_ENDPOINT_COUNT (3)
-#define EMBER_AF_DESCRIPTOR_CLUSTER_SERVER_ENDPOINT_COUNT (4)
+#define EMBER_AF_IDENTIFY_CLUSTER_SERVER_ENDPOINT_COUNT (8)
+#define EMBER_AF_GROUPS_CLUSTER_SERVER_ENDPOINT_COUNT (5)
+#define EMBER_AF_SCENES_CLUSTER_SERVER_ENDPOINT_COUNT (5)
+#define EMBER_AF_ON_OFF_CLUSTER_SERVER_ENDPOINT_COUNT (5)
+#define EMBER_AF_DESCRIPTOR_CLUSTER_SERVER_ENDPOINT_COUNT (9)
 #define EMBER_AF_ACCESS_CONTROL_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_BASIC_INFORMATION_CLUSTER_SERVER_ENDPOINT_COUNT (1)
 #define EMBER_AF_OTA_SOFTWARE_UPDATE_PROVIDER_CLUSTER_CLIENT_ENDPOINT_COUNT (1)
@@ -46,6 +49,33 @@
 #define ZCL_USING_IDENTIFY_CLUSTER_SERVER
 #define EMBER_AF_PLUGIN_IDENTIFY_SERVER
 #define EMBER_AF_PLUGIN_IDENTIFY
+
+// Use this macro to check if the server side of the Groups cluster is included
+#define ZCL_USING_GROUPS_CLUSTER_SERVER
+#define EMBER_AF_PLUGIN_GROUPS_SERVER
+#define EMBER_AF_PLUGIN_GROUPS
+
+// Use this macro to check if the server side of the Scenes cluster is included
+#define ZCL_USING_SCENES_CLUSTER_SERVER
+#define EMBER_AF_PLUGIN_SCENES_SERVER
+#define EMBER_AF_PLUGIN_SCENES
+// User options for server plugin Scenes
+// Cluster spec 1.4.8.2
+#ifdef CHIP_CONFIG_MAX_SCENES_PER_FABRIC
+#define MATTER_SCENES_TABLE_SIZE CHIP_CONFIG_MAX_SCENES_PER_FABRIC
+#else
+#define MATTER_SCENES_TABLE_SIZE 16
+#endif
+
+// Scenes FeatureMap Attribute Toggle Scenes Name feature
+// App cluster specs 1.4.4
+#define MATTER_CLUSTER_SCENE_NAME_SUPPORT_MASK 0x0001
+#define MATTER_CLUSTER_SCENE_NAME_SUPPORT (0x0000 & MATTER_CLUSTER_SCENE_NAME_SUPPORT_MASK)
+
+// Use this macro to check if the server side of the On/Off cluster is included
+#define ZCL_USING_ON_OFF_CLUSTER_SERVER
+#define EMBER_AF_PLUGIN_ON_OFF_SERVER
+#define EMBER_AF_PLUGIN_ON_OFF
 
 // Use this macro to check if the server side of the Descriptor cluster is included
 #define ZCL_USING_DESCRIPTOR_CLUSTER_SERVER
