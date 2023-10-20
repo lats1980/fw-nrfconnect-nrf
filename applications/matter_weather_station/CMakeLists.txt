@@ -49,6 +49,7 @@ target_sources(app PRIVATE
     src/main.cpp
     src/battery.cpp
     src/buzzer.cpp
+    src/zcl_callbacks.cpp
     src/zap-generated/IMClusterCommandHandler.cpp
     src/zap-generated/callback-stub.cpp
     ${COMMON_ROOT}/src/led_widget.cpp

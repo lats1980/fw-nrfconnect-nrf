@@ -16,6 +16,10 @@ config AVERAGE_CURRENT_CONSUMPTION
 config CHIP_ICD_SUBSCRIPTION_HANDLING
 	default y
 
+config NUMBER_OF_RELAY
+	int "Maximum number of virtual relays supported by weather station"
+	default 5
+
 source "${ZEPHYR_BASE}/../modules/lib/matter/config/nrfconnect/chip-module/Kconfig.features"
 source "${ZEPHYR_BASE}/../modules/lib/matter/config/nrfconnect/chip-module/Kconfig.defaults"
 source "Kconfig.zephyr"

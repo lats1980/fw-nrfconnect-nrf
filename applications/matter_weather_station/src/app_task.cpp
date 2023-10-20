@@ -45,7 +45,7 @@ LOG_MODULE_DECLARE(app);
 namespace
 {
 enum class FunctionTimerMode { kDisabled, kFactoryResetTrigger, kFactoryResetComplete };
-enum class LedState { kAlive, kAdvertisingBle, kConnectedBle, kProvisioned, kTopSide, kLeftSide, kBottomSide, kRightSide, kRearSide};
+enum class LedState { kAlive, kAdvertisingBle, kConnectedBle, kProvisioned, kTopSide, kLeftSide, kBottomSide, kRightSide, kRearSide, kSwitchOff};
 
 #if CONFIG_AVERAGE_CURRENT_CONSUMPTION <= 0
 #error Invalid CONFIG_AVERAGE_CURRENT_CONSUMPTION value set
@@ -85,6 +85,12 @@ constexpr uint32_t kDeviceAverageCurrentConsumptionUa = CONFIG_AVERAGE_CURRENT_C
 constexpr uint32_t kFullBatteryOperationTime = kBatteryCapacityUaH / kDeviceAverageCurrentConsumptionUa * 3600;
 /* It is recommended to toggle the signalled state with 0.5 s interval. */
 constexpr size_t kIdentifyTimerIntervalMs = 500;
+
+constexpr uint8_t kTopUpsideEndpointId = 4;
+constexpr uint8_t kBottomUpsideEndpointId = 5;
+constexpr uint8_t kLeftUpsideEndpointId = 6;
+constexpr uint8_t kRightUpsideEndpointId = 7;
+constexpr uint8_t kRearUpsideEndpointId = 8;
 
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
@@ -166,6 +172,7 @@ CHIP_ERROR AppTask::Init()
 	sGreenLED.Init(DK_LED2);
 	sBlueLED.Init(DK_LED3);
 
+	mUpSide = AppTask::UNDEFINED;
 	UpdateStatusLED();
 
 	/* Initialize buttons */
@@ -352,12 +359,17 @@ void AppTask::DispatchEvent(AppEvent &event)
 
 void AppTask::ButtonPushHandler()
 {
+	if(sAppTask.GetEndPointByUpside() != 0)
+		return;
+
 	sFunctionTimerMode = FunctionTimerMode::kFactoryResetTrigger;
 	k_timer_start(&sFunctionTimer, K_MSEC(kFactoryResetTriggerTimeoutMs), K_NO_WAIT);
 }
 
 void AppTask::ButtonReleaseHandler()
 {
+	chip::EndpointId endPointId;
+
 	/* If the button was released within the first kFactoryResetTriggerTimeoutMs, open the BLE pairing
 	 * window. */
 	if (sFunctionTimerMode == FunctionTimerMode::kFactoryResetTrigger) {
@@ -366,6 +378,12 @@ void AppTask::ButtonReleaseHandler()
 
 	sFunctionTimerMode = FunctionTimerMode::kDisabled;
 	k_timer_stop(&sFunctionTimer);
+
+	endPointId = sAppTask.GetEndPointByUpside();
+	if(endPointId >= kTopUpsideEndpointId) {
+		sAppTask.mSwitchState[endPointId - kTopUpsideEndpointId] = !sAppTask.mSwitchState[endPointId - kTopUpsideEndpointId];
+		sAppTask.UpdateClusterState(endPointId);
+	}
 }
 
 void AppTask::ButtonStateHandler(uint32_t buttonState, uint32_t hasChanged)
@@ -404,7 +422,7 @@ void AppTask::XYZMeasurementsTimerHandler()
 {
 	struct sensor_value data[ACCELEROMETER_CHANNELS];
 	int ret;
-	float float_data[ACCELEROMETER_CHANNELS];
+	//float float_data[ACCELEROMETER_CHANNELS];
 
 	ret = sensor_sample_fetch(sAdxl362SensorDev);
 	if (ret != 0) {
@@ -636,16 +654,23 @@ void AppTask::UpdateStatusLED()
 		nextState = LedState::kAlive;
 	}
 
-	if (GetAppTask().mUpSide == AppTask::TOP) {
-		nextState = LedState::kTopSide;
-	} else if (GetAppTask().mUpSide == AppTask::BOTTOM) {
-		nextState = LedState::kBottomSide;
-	} else if (GetAppTask().mUpSide == AppTask::RIGHT) {
-		nextState = LedState::kRightSide;
-	} else if (GetAppTask().mUpSide == AppTask::LEFT) {
-		nextState = LedState::kLeftSide;
-	} else if (GetAppTask().mUpSide == AppTask::REAR) {
-		nextState = LedState::kRearSide;
+	chip::EndpointId upsideEndpointId = GetAppTask().GetEndPointByUpside();
+	if (upsideEndpointId >= kTopUpsideEndpointId) {
+		if (GetAppTask().mSwitchState[upsideEndpointId - kTopUpsideEndpointId]) {
+			if (GetAppTask().mUpSide == AppTask::TOP) {
+				nextState = LedState::kTopSide;
+			} else if (GetAppTask().mUpSide == AppTask::BOTTOM) {
+				nextState = LedState::kBottomSide;
+			} else if (GetAppTask().mUpSide == AppTask::RIGHT) {
+				nextState = LedState::kRightSide;
+			} else if (GetAppTask().mUpSide == AppTask::LEFT) {
+				nextState = LedState::kLeftSide;
+			} else if (GetAppTask().mUpSide == AppTask::REAR) {
+				nextState = LedState::kRearSide;
+			}
+		} else {
+			nextState = LedState::kSwitchOff;
+		}
 	}
 
 	/* In case of changing signalled state, turn off all leds to synchronize blinking */
@@ -673,22 +698,32 @@ void AppTask::UpdateStatusLED()
 		sRedLED.Blink(50, 950);
 		break;
 	case LedState::kTopSide:
-		sBlueLED.Set(true);
+		if (sAppTask.mSwitchState[kTopUpsideEndpointId - kTopUpsideEndpointId]) {
+			sBlueLED.Set(true);
+		}
 		break;
 	case LedState::kBottomSide:
-		sRedLED.Set(true);
+		if (sAppTask.mSwitchState[kBottomUpsideEndpointId - kTopUpsideEndpointId]) {
+			sRedLED.Set(true);
+		}
 		break;
 	case LedState::kRightSide:
-		sGreenLED.Set(true);
-		sRedLED.Set(true);
+		if (sAppTask.mSwitchState[kRightUpsideEndpointId - kTopUpsideEndpointId]) {
+			sGreenLED.Set(true);
+			sRedLED.Set(true);
+		}
 		break;
 	case LedState::kLeftSide:
-		sGreenLED.Set(true);
+		if (sAppTask.mSwitchState[kLeftUpsideEndpointId - kTopUpsideEndpointId]) {
+			sGreenLED.Set(true);
+		}
 		break;
 	case LedState::kRearSide:
-		sRedLED.Set(true);
-		sGreenLED.Set(true);
-		sBlueLED.Set(true);
+		if (sAppTask.mSwitchState[kRearUpsideEndpointId - kTopUpsideEndpointId]) {
+			sRedLED.Set(true);
+			sGreenLED.Set(true);
+			sBlueLED.Set(true);
+		}
 		break;
 	default:
 		break;
@@ -755,5 +790,59 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 		break;
 	default:
 		break;
+	}
+}
+
+chip::EndpointId AppTask::GetEndPointByUpside(void)
+{
+	AppTask::UpSide_t currentUpside;
+
+	currentUpside = GetCurrentUpside();
+	if (currentUpside == AppTask::TOP) {
+		return kTopUpsideEndpointId;
+	} else if (currentUpside == AppTask::BOTTOM) {
+		return kBottomUpsideEndpointId;
+	} else if (currentUpside == AppTask::RIGHT) {
+		return kRightUpsideEndpointId;
+	} else if (currentUpside == AppTask::LEFT) {
+		return kLeftUpsideEndpointId;
+	} else if (currentUpside == AppTask::REAR) {
+		return kRearUpsideEndpointId;
+	} else {
+		return 0;
+	}
+}
+
+bool AppTask::SetSwitchStateByEndpoint(chip::EndpointId aEndpointId, bool aNewState)
+{
+	if (aEndpointId >= kTopUpsideEndpointId) {
+		mSwitchState[aEndpointId - kTopUpsideEndpointId] = aNewState;
+		UpdateStatusLED();
+		return true;
+	}
+
+	return false;
+}
+
+void AppTask::UpdateClusterState(chip::EndpointId aEndpointId)
+{
+	EmberAfStatus cluster_status;
+	bool onoff;
+
+	cluster_status = Clusters::OnOff::Attributes::OnOff::Get(aEndpointId, &onoff);
+	if (cluster_status == EMBER_ZCL_STATUS_SUCCESS) {
+		SystemLayer().ScheduleLambda([this, aEndpointId] {
+			/* write the new on/off value */
+			if (aEndpointId >= kTopUpsideEndpointId) {
+				EmberAfStatus status =
+					Clusters::OnOff::Attributes::OnOff::Set(aEndpointId, sAppTask.mSwitchState[aEndpointId - kTopUpsideEndpointId]);
+
+				if (status != EMBER_ZCL_STATUS_SUCCESS) {
+					LOG_ERR("Updating on/off cluster %d failed: %x", aEndpointId, status);
+				}
+			}
+		});
+	} else {
+		LOG_ERR("Get on/off cluster failed: %x", cluster_status);
 	}
 }

@@ -32,13 +32,13 @@ struct k_timer;
 class AppTask {
 public:
 	enum UpSide_t : uint8_t {
-		UNDEFINED = 0,
-		TOP,
+		TOP = 0,
 		BOTTOM,
 		LEFT,
 		RIGHT,
 		FRONT,
-		REAR
+		REAR,
+		UNDEFINED
 	};
 	CHIP_ERROR StartApp();
 
@@ -46,6 +46,10 @@ public:
 	void UpdateClustersState();
 	static void OnIdentifyStart(Identify *);
 	static void OnIdentifyStop(Identify *);
+	AppTask::UpSide_t GetCurrentUpside() { return mUpSide; }
+	chip::EndpointId GetEndPointByUpside();
+	bool SetSwitchStateByEndpoint(chip::EndpointId aEndpointId, bool aNewState);
+	void UpdateClusterState(chip::EndpointId aEndpointId);
 
 private:
 	friend AppTask &GetAppTask();
@@ -73,6 +77,7 @@ private:
 
 	static AppTask sAppTask;
 	UpSide_t mUpSide;
+	bool mSwitchState[CONFIG_NUMBER_OF_RELAY];
 
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
