@@ -12,18 +12,41 @@
 #include <zephyr/net/conn_mgr_connectivity.h>
 #include <zephyr/net/tls_credentials.h>
 
+#include <stdio.h>
+
 #if CONFIG_MODEM_KEY_MGMT
 #include <modem/modem_key_mgmt.h>
 #endif
 
 #define HTTPS_PORT		"443"
-#define HTTPS_HOSTNAME		"example.com"
-#define HTTP_HEAD		\
-				"HEAD / HTTP/1.1\r\n"	\
-				"Host: " HTTPS_HOSTNAME ":" HTTPS_PORT "\r\n"		\
-				"Connection: close\r\n\r\n"
+#define HTTPS_HOSTNAME		"httpbin.org"
 
-#define HTTP_HEAD_LEN		(sizeof(HTTP_HEAD) - 1)
+#define HTTP_REQUEST		\
+				"POST /post HTTP/1.1\r\n"	\
+				"Host: " HTTPS_HOSTNAME ":" HTTPS_PORT "\r\n"		\
+				"Accept: */*\r\n"	\
+				"Content-Type: application/text\r\n"	\
+				"Content-Length: 1600\r\n"	\
+				"Connection: Keep-Alive\r\n\r\n" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789" \
+				"\r\n"
+
+#define HTTP_REQUEST_LEN		(sizeof(HTTP_REQUEST) - 1)
 #define HTTP_HDR_END		"\r\n\r\n"
 
 #define RECV_BUF_SIZE		2048
@@ -33,12 +56,12 @@
 #define L4_EVENT_MASK		(NET_EVENT_L4_CONNECTED | NET_EVENT_L4_DISCONNECTED)
 #define CONN_LAYER_EVENT_MASK	(NET_EVENT_CONN_IF_FATAL_ERROR)
 
-static const char send_buf[] = HTTP_HEAD;
+static const char send_buf[] = HTTP_REQUEST;
 static char recv_buf[RECV_BUF_SIZE];
 static K_SEM_DEFINE(network_connected_sem, 0, 1);
-/* Certificate for `example.com` */
+/* Certificate for `httpbin.org` */
 static const char cert[] = {
-#include "../cert/DigiCertGlobalRootCA.pem"
+#include "../cert/AmazonRootCA1.pem"
 };
 
 /* Zephyr NET management event callback structures. */
@@ -202,6 +225,7 @@ static void send_http_request(void)
 		.ai_socktype = SOCK_STREAM,
 	};
 	char peer_addr[INET6_ADDRSTRLEN];
+	int r_data_sz;
 
 	printk("Looking up %s\n", HTTPS_HOSTNAME);
 
@@ -238,46 +262,59 @@ static void send_http_request(void)
 		printk("connect() failed, err: %d\n", errno);
 		goto clean_up;
 	}
+	while (1) {
+		off = 0;
+		do {
+			bytes = send(fd, &send_buf[off], HTTP_REQUEST_LEN - off, 0);
+			if (bytes < 0) {
+				printk("send() failed, err %d\n", errno);
+				goto clean_up;
+			}
+			off += bytes;
+		} while (off < HTTP_REQUEST_LEN);
 
-	off = 0;
-	do {
-		bytes = send(fd, &send_buf[off], HTTP_HEAD_LEN - off, 0);
-		if (bytes < 0) {
-			printk("send() failed, err %d\n", errno);
-			goto clean_up;
+		printk("Sent %d bytes\n", off);
+
+		memset(recv_buf, '\0', sizeof(recv_buf));
+		off = 0;
+		do {
+			bytes = recv(fd, &recv_buf[off], 1, 0);
+			if (bytes < 0) {
+				printk("recv() failed, err %d\n", errno);
+				goto clean_up;
+			}
+			off += bytes;
+			if (off >= 4 && strstr(recv_buf, "\r\n\r\n"))
+				break;
+			if (off == RECV_BUF_SIZE) {
+				printk("response header is larger than receiving buffer!\n");
+				goto clean_up;
+			}
+		} while (bytes != 0 /* peer closed connection */);
+
+		printk("Received %d bytes response header\n", off);
+		printk("%s\n", recv_buf);
+		p = strstr(recv_buf, "Content-Length: ");
+		if (p) {
+			sscanf(p, "Content-Length: %d", &r_data_sz);
+			//printk("to receive %d bytes\n", r_data_sz);
+			if (r_data_sz > RECV_BUF_SIZE) {
+				printk("response data is larger than receiving buffer!\n");
+				goto clean_up;
+			}
+			memset(recv_buf, '\0', sizeof(recv_buf));
+			off = 0;
+			bytes = recv(fd, &recv_buf[off], r_data_sz, 0);
+			if (bytes < 0) {
+				printk("recv() failed, err %d\n", errno);
+				goto clean_up;
+			}
+			off += bytes;
+			printk("Received %d bytes\n", off);
+			printk("%s\n", recv_buf);
 		}
-		off += bytes;
-	} while (off < HTTP_HEAD_LEN);
-
-	printk("Sent %d bytes\n", off);
-
-	off = 0;
-	do {
-		bytes = recv(fd, &recv_buf[off], RECV_BUF_SIZE - off, 0);
-		if (bytes < 0) {
-			printk("recv() failed, err %d\n", errno);
-			goto clean_up;
-		}
-		off += bytes;
-	} while (bytes != 0 /* peer closed connection */);
-
-	printk("Received %d bytes\n", off);
-
-	/* Make sure recv_buf is NULL terminated (for safe use with strstr) */
-	if (off < sizeof(recv_buf)) {
-		recv_buf[off] = '\0';
-	} else {
-		recv_buf[sizeof(recv_buf) - 1] = '\0';
+		k_sleep(K_SECONDS(3));
 	}
-
-	/* Print HTTP response */
-	p = strstr(recv_buf, "\r\n");
-	if (p) {
-		off = p - recv_buf;
-		recv_buf[off + 1] = '\0';
-		printk("\n>\t %s\n\n", recv_buf);
-	}
-
 	printk("Finished, closing socket.\n");
 
 clean_up:
