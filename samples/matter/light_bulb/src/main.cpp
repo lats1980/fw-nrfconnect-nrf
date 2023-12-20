@@ -23,16 +23,6 @@ static int InitUSB()
     if (err)
     {
         LOG_ERR("Failed to initialize USB device");
-        return err;
-    }
-
-    const struct device * dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
-    uint32_t dtr              = 0;
-
-    while (!dtr)
-    {
-        uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
-        k_sleep(K_MSEC(100));
     }
 
     return 0;
@@ -44,7 +34,7 @@ int main()
 	CHIP_ERROR err = CHIP_NO_ERROR;
 
 #if DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart)
-    //err = chip::System::MapErrorZephyr(InitUSB());
+    err = chip::System::MapErrorZephyr(InitUSB());
 #endif
 
     if (err == CHIP_NO_ERROR)
