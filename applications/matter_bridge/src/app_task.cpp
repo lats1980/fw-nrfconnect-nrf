@@ -26,6 +26,10 @@
 #include "dfu/ota/ota_util.h"
 #endif /* CONFIG_BRIDGED_DEVICE_BT */
 
+#ifdef CONFIG_CHIP_BT_WIFI_PROV
+#include "bt_wifi_prov/bt_wifi_prov_service.h"
+#endif
+
 #include <app-common/zap-generated/ids/Attributes.h>
 #include <app-common/zap-generated/ids/Clusters.h>
 #include <app/server/OnboardingCodesUtil.h>
@@ -85,6 +89,12 @@ void BLEStateChangeCallback(Nrf::BLEConnectivityManager::State state)
 }
 
 #endif /* CONFIG_BRIDGED_DEVICE_BT */
+
+#ifdef CONFIG_CHIP_BT_WIFI_PROV
+constexpr uint16_t kAdvertisingIntervalMin = 100;
+constexpr uint16_t kAdvertisingIntervalMax = 150;
+constexpr uint8_t kWifiProvPriority = 2;
+#endif
 
 } /* namespace */
 
@@ -174,6 +184,16 @@ CHIP_ERROR AppTask::Init()
 	/* Register Matter event handler that controls the connectivity status LED based on the captured Matter network
 	 * state. */
 	ReturnErrorOnFailure(Nrf::Matter::RegisterEventHandler(Nrf::Board::DefaultMatterEventHandler, 0));
+
+#ifdef CONFIG_CHIP_BT_WIFI_PROV
+	/* Initialize Nordic Wi-Fi Provisioning Service */
+	if (!Nrf::GetWPVService().Init(kWifiProvPriority, kAdvertisingIntervalMin, kAdvertisingIntervalMax)) {
+		ChipLogError(Zcl, "Cannot initialize WIFI Provisioning service");
+	}
+	if (!Nrf::GetWPVService().StartServer()) {
+		LOG_ERR("GetWPVService().StartServer() failed");
+	}
+#endif
 
 	return Nrf::Matter::StartServer();
 }

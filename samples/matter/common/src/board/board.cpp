@@ -261,6 +261,7 @@ void Board::StartBLEAdvertisementHandler(const ButtonAction &action)
 			GetDFUOverSMP().StartServer();
 #else
 			LOG_INF("Software update is disabled");
+			StartDNSSDAdvertisement();
 #endif
 		} else {
 			/* In this case we start both Bluetooth LE SMP and Matter advertising at the same time */
@@ -290,6 +291,19 @@ void Board::StartBLEAdvertisement()
 	}
 
 	if (chip::Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow() !=
+	    CHIP_NO_ERROR) {
+		LOG_ERR("OpenBasicCommissioningWindow() failed");
+	}
+}
+
+void Board::StartDNSSDAdvertisement()
+{
+	if (chip::Server::GetInstance().GetFabricTable().FabricCount() != 0) {
+		LOG_INF("Matter service BLE advertising not started - device is already commissioned");
+		return;
+	}
+
+	if (chip::Server::GetInstance().GetCommissioningWindowManager().OpenBasicCommissioningWindow(chip::System::Clock::Seconds16(CHIP_DEVICE_CONFIG_DISCOVERY_TIMEOUT_SECS), chip::CommissioningWindowAdvertisement::kDnssdOnly) !=
 	    CHIP_NO_ERROR) {
 		LOG_ERR("OpenBasicCommissioningWindow() failed");
 	}

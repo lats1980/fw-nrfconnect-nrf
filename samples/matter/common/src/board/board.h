@@ -97,6 +97,8 @@ public:
 	 */
 	static void StartBLEAdvertisement();
 
+	static void StartDNSSDAdvertisement();
+
 	/**
 	 * @brief Default Matter event handler
 	 *

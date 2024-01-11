@@ -9,6 +9,10 @@
 
 #include <zephyr/net/wifi_mgmt.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @defgroup wifi_mgmt_ext Wi-Fi management extension library
  * @{
@@ -26,5 +30,8 @@ enum net_request_wifi_cmd_ext {
 NET_MGMT_DEFINE_REQUEST_HANDLER(NET_REQUEST_WIFI_CONNECT_STORED);
 
 /** @} */
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* WIFI_MGMT_EXT_H__ */
