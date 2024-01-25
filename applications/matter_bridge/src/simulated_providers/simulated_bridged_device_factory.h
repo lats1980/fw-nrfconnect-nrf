@@ -30,8 +30,8 @@ namespace SimulatedBridgedDeviceFactory
 {
 using UpdateAttributeCallback = BridgedDeviceDataProvider::UpdateAttributeCallback;
 using DeviceType = MatterBridgedDevice::DeviceType;
-using BridgedDeviceFactory = DeviceFactory<MatterBridgedDevice, DeviceType, const char *>;
-using SimulatedDataProviderFactory = DeviceFactory<BridgedDeviceDataProvider, DeviceType, UpdateAttributeCallback>;
+using BridgedDeviceFactory = Nrf::DeviceFactory<MatterBridgedDevice, DeviceType, const char *>;
+using SimulatedDataProviderFactory = Nrf::DeviceFactory<BridgedDeviceDataProvider, DeviceType, UpdateAttributeCallback>;
 
 BridgedDeviceFactory &GetBridgedDeviceFactory();
 SimulatedDataProviderFactory &GetDataProviderFactory();

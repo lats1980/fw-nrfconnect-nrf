@@ -36,8 +36,8 @@ enum ServiceUuid : uint16_t { LedButtonService = 0xbcd1, EnvironmentalSensorServ
 
 using UpdateAttributeCallback = BridgedDeviceDataProvider::UpdateAttributeCallback;
 using DeviceType = MatterBridgedDevice::DeviceType;
-using BridgedDeviceFactory = DeviceFactory<MatterBridgedDevice, DeviceType, const char *>;
-using BleDataProviderFactory = DeviceFactory<BridgedDeviceDataProvider, ServiceUuid, UpdateAttributeCallback>;
+using BridgedDeviceFactory = Nrf::DeviceFactory<MatterBridgedDevice, DeviceType, const char *>;
+using BleDataProviderFactory = Nrf::DeviceFactory<BridgedDeviceDataProvider, ServiceUuid, UpdateAttributeCallback>;
 
 BridgedDeviceFactory &GetBridgedDeviceFactory();
 BleDataProviderFactory &GetDataProviderFactory();

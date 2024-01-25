@@ -7,6 +7,7 @@
 #pragma once
 
 #include "bridge_util.h"
+#include "util/finite_map.h"
 #include "bridged_device_data_provider.h"
 #include "matter_bridged_device.h"
 
@@ -161,7 +162,7 @@ private:
 
 	static constexpr uint8_t kMaxDataProviders = CONFIG_BRIDGE_MAX_BRIDGED_DEVICES_NUMBER;
 
-	using DeviceMap = FiniteMap<BridgedDevicePair, kMaxBridgedDevices>;
+	using DeviceMap = Nrf::FiniteMap<uint16_t, BridgedDevicePair, kMaxBridgedDevices>;
 
 	CHIP_ERROR AddSingleDevice(MatterBridgedDevice *device, BridgedDeviceDataProvider *dataProvider,
 				   chip::Optional<uint8_t> &devicesPairIndex, uint16_t endpointId);
