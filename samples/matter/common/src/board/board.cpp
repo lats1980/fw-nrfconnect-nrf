@@ -337,6 +337,9 @@ void Board::DefaultMatterEventHandler(const ChipDeviceEvent *event, intptr_t /* 
 			sInstance.UpdateDeviceState(DeviceState::DeviceDisconnected);
 		}
 		break;
+	case DeviceEventType::kCommissioningComplete:
+		chip::Server::GetInstance().GetCommissioningWindowManager().CloseCommissioningWindow();
+		break;
 	default:
 		break;
 	}
