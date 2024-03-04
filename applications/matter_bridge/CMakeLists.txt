@@ -140,7 +140,7 @@ endif() # CONFIG_BRIDGE_HUMIDITY_SENSOR_BRIDGED_DEVICE
 endif() # CONFIG_BRIDGED_DEVICE_BT
 
 if(CONFIG_CHIP_BT_WIFI_PROV)
-    target_sources(app PRIVATE ${COMMON_ROOT}/src/bt_wifi_prov/bt_wifi_prov_service.cpp)
+    target_sources(app PRIVATE ${ZEPHYR_NRF_MODULE_DIR}/samples/matter/common/src/bt_wifi_prov/bt_wifi_prov_service.cpp)
 endif()
 
 chip_configure_data_model(app
