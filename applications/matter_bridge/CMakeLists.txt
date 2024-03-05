@@ -15,6 +15,8 @@ if(CONF_FILE)
     get_filename_component(CONFIG_FILE_NAME ${CONF_FILE} NAME)
 endif()
 
+set(CHIP_CFLAGS "-flto")
+
 if(NOT CONFIG_FILE_NAME STREQUAL "prj_no_dfu.conf")
     set(PM_STATIC_YML_FILE ${CMAKE_CURRENT_SOURCE_DIR}/configuration/${BOARD}/pm_static_dfu.yml)
 endif()
@@ -142,6 +144,9 @@ endif() # CONFIG_BRIDGED_DEVICE_BT
 if(CONFIG_CHIP_BT_WIFI_PROV)
     target_sources(app PRIVATE ${ZEPHYR_NRF_MODULE_DIR}/samples/matter/common/src/bt_wifi_prov/bt_wifi_prov_service.cpp)
 endif()
+
+target_compile_options(app PRIVATE -flto)
+target_compile_options(..__nrf__modules__hostap PRIVATE -flto)
 
 chip_configure_data_model(app
     INCLUDE_SERVER
