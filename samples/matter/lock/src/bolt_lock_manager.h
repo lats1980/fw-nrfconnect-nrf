@@ -47,9 +47,9 @@ public:
 
 	bool GetUser(uint16_t userIndex, EmberAfPluginDoorLockUserInfo &user) const;
 	bool SetUser(uint16_t userIndex, chip::FabricIndex creator, chip::FabricIndex modifier,
-		     const chip::CharSpan &userName, uint32_t uniqueId, UserStatusEnum userStatus,
-		     UserTypeEnum userType, CredentialRuleEnum credentialRule, const CredentialStruct *credentials,
-		     size_t totalCredentials);
+			 const chip::CharSpan &userName, uint32_t uniqueId, UserStatusEnum userStatus,
+			 UserTypeEnum userType, CredentialRuleEnum credentialRule, const CredentialStruct *credentials,
+			 size_t totalCredentials);
 
 	bool GetCredential(uint16_t credentialIndex, CredentialTypeEnum credentialType,
 			   EmberAfPluginDoorLockCredentialInfo &credential) const;
@@ -81,6 +81,11 @@ private:
 
 	CredentialData mCredentialData[CONFIG_LOCK_NUM_CREDENTIALS];
 	EmberAfPluginDoorLockCredentialInfo mCredentials[CONFIG_LOCK_NUM_CREDENTIALS] = {};
+
+	uint8_t mTotalUsersCount;
+	uint8_t mTotalCredentialsCount;
+	bool RestoreUsers();
+	bool RestoreCredentials();
 
 	static BoltLockManager sLock;
 };
