@@ -201,6 +201,12 @@ void BoltLockManager::Unlock(OperationSource source)
 	k_timer_start(&mActuatorTimer, K_MSEC(kActuatorMovementTimeMs), K_NO_WAIT);
 }
 
+bool BoltLockManager::SendLockAlarm(chip::EndpointId endpointId, AlarmCodeEnum alarmCode)
+{
+	ChipLogProgress(Zcl, "Sending the LockAlarm event [endpointId=%d,alarmCode=%u]", endpointId, to_underlying(alarmCode));
+    return DoorLockServer::Instance().SendLockAlarmEvent(endpointId, alarmCode);
+}
+
 void BoltLockManager::ActuatorTimerEventHandler(k_timer *timer)
 {
 	/*

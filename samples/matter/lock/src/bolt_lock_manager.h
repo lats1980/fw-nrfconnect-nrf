@@ -61,6 +61,7 @@ public:
 
 	void Lock(OperationSource source);
 	void Unlock(OperationSource source);
+	bool SendLockAlarm(chip::EndpointId endpointId, AlarmCodeEnum alarmCode);
 
 private:
 	friend class AppTask;

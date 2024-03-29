@@ -320,6 +320,15 @@ void AppTask::StartBLEAdvertisementAndLockActionEventHandler(const AppEvent &eve
 
 void AppTask::LockActionEventHandler(const AppEvent &event)
 {
+	/* Test code to send lock jammed alarm at first 5 times to press lock/unlock button */
+	static uint8_t alarmTest;
+
+	if (alarmTest < 5) {
+		BoltLockMgr().SendLockAlarm(kLockEndpointId, AlarmCodeEnum::kLockJammed);
+		alarmTest++;
+		return;
+	}
+	/* Test code end */
 	if (BoltLockMgr().IsLocked()) {
 		BoltLockMgr().Unlock(BoltLockManager::OperationSource::kButton);
 	} else {
