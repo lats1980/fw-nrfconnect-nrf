@@ -61,6 +61,7 @@ public:
 
 	void Lock(OperationSource source);
 	void Unlock(OperationSource source);
+	void FactoryResetUserCredential();
 
 private:
 	friend class AppTask;

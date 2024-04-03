@@ -42,6 +42,22 @@ private:
 	static void OnFabricRemovedTimerCallback(k_timer *timer)
 	{
 #ifndef CONFIG_CHIP_LAST_FABRIC_REMOVED_NONE
+#ifdef CONFIG_CHIP_LAST_FABRIC_REMOVED_ERASE_AND_REBOOT
+		if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 1) {
+			/* Workaround to check Apple Vendor ID when there is 1 fabric left */
+			for (int i = 0; i < UINT8_MAX; i++) {
+				const auto * fabricInfo = chip::Server::GetInstance().GetFabricTable().FindFabricWithIndex(i);
+				if (fabricInfo != nullptr) {
+					if (fabricInfo->GetVendorId() == 0x1349 || fabricInfo->GetVendorId() == 0x1384) {
+						chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+							BoltLockMgr().FactoryResetUserCredential();
+							chip::Server::GetInstance().ScheduleFactoryReset();
+						});
+					}
+				}
+			}
+		}
+#endif // CONFIG_CHIP_LAST_FABRIC_REMOVED_ERASE_AND_REBOOT
 		if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 0) {
 			chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
 #ifdef CONFIG_CHIP_LAST_FABRIC_REMOVED_ERASE_AND_REBOOT

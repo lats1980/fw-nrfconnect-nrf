@@ -24,6 +24,50 @@ PersistentStorageNode CreateIndexNode(uint8_t nodeIndex, PersistentStorageNode *
 } /* namespace */
 
 namespace Nrf {
+bool LockStorageManager::FactoryReset(void)
+{
+	uint8_t totalUsersCount, totalCredentialsCount;
+
+	LoadDataToObject(&mUsersCount, totalUsersCount);
+	/* userIndex is guaranteed by the caller to be between 1 and CONFIG_LOCK_NUM_USERS */
+	for (size_t userIndex = 1; userIndex <= totalUsersCount; userIndex++)
+	{
+		PersistentStorageNode id = CreateIndexNode(userIndex, &mUserData);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(userIndex, &mUserUniqueId);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(userIndex, &mUserType);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(userIndex, &mUserStatus);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(userIndex, &mUserCreateBy);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(userIndex, &mUserLastModifiedBy);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(userIndex, &mUserCredentialRule);
+		PersistentStorage::Instance().Remove(&id);
+	}
+	PersistentStorage::Instance().Remove(&mUsersCount);
+	LoadDataToObject(&mCredentialsCount, totalCredentialsCount);
+	for (size_t credentialIndex = 1; credentialIndex <= totalCredentialsCount; credentialIndex++)
+	{
+		PersistentStorageNode id = CreateIndexNode(credentialIndex, &mCredentialStatus);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(credentialIndex, &mCredentialType);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(credentialIndex, &mCredentialCreatedBy);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(credentialIndex, &mCredentialLastModifiedBy);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(credentialIndex, &mCredentialSecret);
+		PersistentStorage::Instance().Remove(&id);
+		id = CreateIndexNode(credentialIndex, &mCredentialSecretSize);
+		PersistentStorage::Instance().Remove(&id);
+	}
+	PersistentStorage::Instance().Remove(&mCredentialsCount);
+	return true;
+}
+
 bool LockStorageManager::StoreUsersCount(uint8_t count)
 {
 	return PersistentStorage::Instance().Store(&mUsersCount, &count, sizeof(count));
@@ -202,7 +246,12 @@ bool LockStorageManager::StoreCredentialSecret(const uint8_t *secret, size_t sec
 {
 	PersistentStorageNode id = CreateIndexNode(index, &mCredentialSecret);
 
-	return PersistentStorage::Instance().Store(&id, secret, secretSize);
+	if (secretSize != 0) {
+		return PersistentStorage::Instance().Store(&id, secret, secretSize);
+	}
+	else {
+		return PersistentStorage::Instance().Remove(&id);
+	}
 }
 
 bool LockStorageManager::LoadCredentialSecret(uint8_t *secret, size_t secretSize, uint8_t index)

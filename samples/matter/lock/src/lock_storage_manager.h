@@ -44,6 +44,7 @@ public:
 	}
 
 	bool Init() { return PersistentStorage::Instance().Init(); }
+	bool FactoryReset();
 	bool StoreUsersCount(uint8_t count);
 	bool LoadUsersCount(uint8_t &count);
 	bool StoreUserData(BoltLockManager::UserData userData, uint8_t index);

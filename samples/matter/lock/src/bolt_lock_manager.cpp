@@ -53,20 +53,6 @@ bool BoltLockManager::SetUser(uint16_t userIndex, FabricIndex creator, FabricInd
 	VerifyOrReturnError(userName.size() <= DOOR_LOCK_MAX_USER_NAME_SIZE, false);
 	VerifyOrReturnError(totalCredentials <= CONFIG_LOCK_NUM_CREDENTIALS_PER_USER, false);
 
-	Platform::CopyString(userData.mName, userName);
-	memcpy(userData.mCredentials, credentials, totalCredentials * sizeof(CredentialStruct));
-
-	user.userName = CharSpan(userData.mName, userName.size());
-	user.credentials = Span<const CredentialStruct>(userData.mCredentials, totalCredentials);
-	user.userUniqueId = uniqueId;
-	user.userStatus = userStatus;
-	user.userType = userType;
-	user.credentialRule = credentialRule;
-	user.creationSource = DlAssetSource::kMatterIM;
-	user.createdBy = creator;
-	user.modificationSource = DlAssetSource::kMatterIM;
-	user.lastModifiedBy = modifier;
-
 	ChipLogProgress(Zcl, "Setting lock user %u: %s", static_cast<unsigned>(userIndex),
 			userStatus == UserStatusEnum::kAvailable ? "available" : "occupied");
 
@@ -78,11 +64,35 @@ bool BoltLockManager::SetUser(uint16_t userIndex, FabricIndex creator, FabricInd
 					userIndex, creator, modifier, static_cast<int>(userName.size()), userName.data(), uniqueId,
 					to_underlying(userStatus), to_underlying(userType), to_underlying(credentialRule), credentials,
 					static_cast<unsigned int>(totalCredentials));
-	if (totalCredentials == 0) {
+
+	if ((user.userStatus == UserStatusEnum::kAvailable ) && (userStatus == UserStatusEnum::kOccupiedEnabled)) {
+		mTotalUsersCount++;
+	}
+	else if ((user.userStatus == UserStatusEnum::kOccupiedEnabled ) && (userStatus == UserStatusEnum::kAvailable)) {
+		mTotalUsersCount--;
+	}
+
+	Platform::CopyString(userData.mName, userName);
+	memcpy(userData.mCredentials, credentials, totalCredentials * sizeof(CredentialStruct));
+
+	user.userName = CharSpan(userData.mName, userName.size());
+	user.credentials = Span<const CredentialStruct>(userData.mCredentials, totalCredentials);
+	user.userUniqueId = uniqueId;
+
+	user.userStatus = userStatus;
+	user.userType = userType;
+	user.credentialRule = credentialRule;
+	user.creationSource = DlAssetSource::kMatterIM;
+	user.createdBy = creator;
+	user.modificationSource = DlAssetSource::kMatterIM;
+	user.lastModifiedBy = modifier;
+	/*
+	if (totalCredentials == 0 && (user.userStatus == UserStatusEnum::kOccupiedEnabled)) {
 		ChipLogProgress(Zcl, "Setting lock user without credential");
 		return true;
 	}
-	mTotalUsersCount++;
+	*/
+
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreUsersCount(mTotalUsersCount), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreUserData(mUserData[userIndex - 1], userIndex), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreUserUniqueID(user.userUniqueId, userIndex), false);
@@ -91,7 +101,6 @@ bool BoltLockManager::SetUser(uint16_t userIndex, FabricIndex creator, FabricInd
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreUserCreatedBy(user.createdBy, userIndex), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreUserLastModifiedBy(user.lastModifiedBy, userIndex), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreUserCredentialRule(user.credentialRule, userIndex), false);
-
 	return true;
 }
 
@@ -112,26 +121,19 @@ bool BoltLockManager::SetCredential(uint16_t credentialIndex, FabricIndex creato
 					DlCredentialStatus credentialStatus, CredentialTypeEnum credentialType,
 					const ByteSpan &secret)
 {
-	VerifyOrReturnError(credentialIndex > 0 && credentialIndex <= CONFIG_LOCK_NUM_CREDENTIALS, false);
+	VerifyOrReturnError(credentialIndex <= CONFIG_LOCK_NUM_CREDENTIALS, false);
 	VerifyOrReturnError(secret.size() <= kMaxCredentialLength, false);
+
+	if (credentialIndex == 0) {
+		ChipLogProgress(Zcl,"Matter stack try to set wrong index. Just ignore it");
+		return true;
+	}
 
 	CredentialData &credentialData = mCredentialData[credentialIndex - 1];
 	auto &credential = mCredentials[credentialIndex - 1];
 
-	if (!secret.empty()) {
-		memcpy(credentialData.mSecret.Alloc(secret.size()).Get(), secret.data(), secret.size());
-	}
-
-	credential.status = credentialStatus;
-	credential.credentialType = credentialType;
-	credential.credentialData = ByteSpan(credentialData.mSecret.Get(), secret.size());
-	credential.creationSource = DlAssetSource::kMatterIM;
-	credential.createdBy = creator;
-	credential.modificationSource = DlAssetSource::kMatterIM;
-	credential.lastModifiedBy = modifier;
-
 	ChipLogProgress(Zcl, "Setting lock credential %u: %s", static_cast<unsigned>(credentialIndex),
-			credential.status == DlCredentialStatus::kAvailable ? "available" : "occupied");
+			credentialStatus == DlCredentialStatus::kAvailable ? "available" : "occupied");
 
 	ChipLogProgress(
 		Zcl,
@@ -145,15 +147,35 @@ bool BoltLockManager::SetCredential(uint16_t credentialIndex, FabricIndex creato
 #if 0
 	ChipLogByteSpan(Zcl, secret);
 #endif
-	mTotalCredentialsCount++;
+
+	if ((credential.status == DlCredentialStatus::kAvailable) && credentialStatus == DlCredentialStatus::kOccupied) {
+		mTotalCredentialsCount++;
+	}
+	else if ((credential.status == DlCredentialStatus::kOccupied) && credentialStatus == DlCredentialStatus::kAvailable){
+		mTotalCredentialsCount--;
+	}
+
+	if (!secret.empty()) {
+		memcpy(credentialData.mSecret.Alloc(secret.size()).Get(), secret.data(), secret.size());
+	}
+
+	credential.status = credentialStatus;
+	credential.credentialType = credentialType;
+	credential.credentialData = ByteSpan(credentialData.mSecret.Get(), secret.size());
+	credential.creationSource = DlAssetSource::kMatterIM;
+	credential.createdBy = creator;
+	credential.modificationSource = DlAssetSource::kMatterIM;
+	credential.lastModifiedBy = modifier;
+
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialsCount(mTotalCredentialsCount), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialStatus(credentialStatus, credentialIndex), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialType(credentialType, credentialIndex), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialCreatedBy(creator, credentialIndex), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialLastModifiedBy(modifier, credentialIndex), false);
 	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialSecretSize(secret.size(), credentialIndex), false);
-	VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialSecret(secret.data(), secret.size(), credentialIndex), false);
-
+	if (secret.size() > 0) {
+		VerifyOrReturnError(Nrf::LockStorageManager::Instance().StoreCredentialSecret(secret.data(), secret.size(), credentialIndex), false);
+	}
 	return true;
 }
 
@@ -199,6 +221,13 @@ void BoltLockManager::Unlock(OperationSource source)
 
 	mActuatorOperationSource = source;
 	k_timer_start(&mActuatorTimer, K_MSEC(kActuatorMovementTimeMs), K_NO_WAIT);
+}
+
+void BoltLockManager::FactoryResetUserCredential(void)
+{
+	bool result;
+	result = Nrf::LockStorageManager::Instance().FactoryReset();
+	ChipLogProgress(Zcl, "Factory reset user&credential persistent storage: %s", result == true ? "OK" : "Fail");
 }
 
 void BoltLockManager::ActuatorTimerEventHandler(k_timer *timer)
@@ -251,12 +280,13 @@ bool BoltLockManager::RestoreUsers(void)
 		ChipLogProgress(Zcl, "No users to load from the storage.");
 		return Nrf::LockStorageManager::Instance().StoreUsersCount(mTotalUsersCount);
 	}
-	ChipLogProgress(Zcl, "Users restored. Total users: %u", mTotalUsersCount);
+	ChipLogProgress(Zcl, "Total user count restored. Total users: %u", mTotalUsersCount);
 	/* userIndex is guaranteed by the caller to be between 1 and CONFIG_LOCK_NUM_USERS */
 	for (size_t userIndex = 1; userIndex <= mTotalUsersCount; userIndex++)
 	{
 		UserData &userData = mUserData[userIndex - 1];
-		auto &user = mUsers[userIndex];
+		auto &user = mUsers[userIndex - 1];
+		ChipLogProgress(Zcl, "Restore user index: %u", userIndex);
 		Nrf::LockStorageManager::Instance().LoadUserData(userData, userIndex);
 		for (auto &userCredential : userData.mCredentials) {
 			ChipLogProgress(Zcl, "Credential type: %u index: %u", (uint8_t)userCredential.credentialType, userCredential.credentialIndex);
@@ -281,6 +311,7 @@ bool BoltLockManager::RestoreUsers(void)
 		user.credentials = Span<const CredentialStruct>(userData.mCredentials, sizeof(userData.mCredentials));
 		user.createdBy = user.createdBy;
 		user.lastModifiedBy = user.lastModifiedBy;
+		ChipLogProgress(Zcl, "User index: %u ok", userIndex);
 	}
 
 	return true;
@@ -292,13 +323,14 @@ bool BoltLockManager::RestoreCredentials(void)
 		ChipLogProgress(Zcl, "No credentials devices to load from the storage.");
 		return Nrf::LockStorageManager::Instance().StoreCredentialsCount(mTotalCredentialsCount);
 	}
-	ChipLogProgress(Zcl, "Crendential restored. Total credentials: %u", mTotalCredentialsCount);
+	ChipLogProgress(Zcl, "Crendential count restored. Total credentials: %u", mTotalCredentialsCount);
 
 	for (size_t credentialIndex = 1; credentialIndex <= mTotalCredentialsCount; credentialIndex++)
 	{
 		size_t secretSize;
 		CredentialData &credentialData = mCredentialData[credentialIndex - 1];
 		auto &credential = mCredentials[credentialIndex - 1];
+		ChipLogProgress(Zcl, "Restore index: %u", credentialIndex);
 		VerifyOrReturnError(Nrf::LockStorageManager::Instance().LoadCredentialStatus(credential.status, credentialIndex), false);
 		ChipLogProgress(Zcl, "Cred status: %u", (uint8_t)credential.status);
 		VerifyOrReturnError(Nrf::LockStorageManager::Instance().LoadCredentialType(credential.credentialType, credentialIndex), false);
@@ -308,6 +340,7 @@ bool BoltLockManager::RestoreCredentials(void)
 		VerifyOrReturnError(Nrf::LockStorageManager::Instance().LoadCredentialLastModifiedBy(credential.lastModifiedBy, credentialIndex), false);
 		ChipLogProgress(Zcl, "Cred last modified by: %u", credential.lastModifiedBy);
 		VerifyOrReturnError(Nrf::LockStorageManager::Instance().LoadCredentialSecretSize(secretSize, credentialIndex), false);
+		ChipLogProgress(Zcl, "Credential size: %u", secretSize);
 		if (secretSize > 0 && secretSize <= kMaxCredentialLength) {
 			credentialData.mSecret.Alloc(secretSize);
 			VerifyOrReturnError(Nrf::LockStorageManager::Instance().LoadCredentialSecret(credentialData.mSecret.Get(), secretSize, credentialIndex) , false);
@@ -318,12 +351,10 @@ bool BoltLockManager::RestoreCredentials(void)
 			ChipLogProgress(Zcl, "Credential secret:");
 			ChipLogByteSpan(Zcl, credential.credentialData);
 #endif
-		} else {
-			ChipLogProgress(Zcl, "Invalid credential size");
-			return false;
 		}
 		credential.creationSource = DlAssetSource::kMatterIM;
 		credential.modificationSource = DlAssetSource::kMatterIM;
+		ChipLogProgress(Zcl, "Restore index: %u ok", credentialIndex);
 	}
 
 	return true;

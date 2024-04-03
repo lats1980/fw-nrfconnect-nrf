@@ -331,6 +331,7 @@ void AppTask::LockActionEventHandler(const AppEvent &event)
 void AppTask::SwitchImagesDone()
 {
 	/* Wipe out whole settings as they will not apply to the new application image. */
+	BoltLockMgr().FactoryResetUserCredential();
 	chip::Server::GetInstance().ScheduleFactoryReset();
 }
 
@@ -478,6 +479,7 @@ void AppTask::FunctionTimerEventHandler(const AppEvent &event)
 	} else if (Instance().mFunction == FunctionEvent::FactoryReset) {
 		/* Actually trigger Factory Reset */
 		Instance().mFunction = FunctionEvent::NoneSelected;
+		BoltLockMgr().FactoryResetUserCredential();
 		chip::Server::GetInstance().ScheduleFactoryReset();
 
 	} else if (Instance().mFunction == FunctionEvent::AdvertisingStart) {
