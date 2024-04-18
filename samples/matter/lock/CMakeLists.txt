@@ -42,8 +42,10 @@ target_include_directories(app PRIVATE
 target_sources(app PRIVATE
     src/app_task.cpp
     src/bolt_lock_manager.cpp
+    src/lock_storage_manager.cpp
     src/main.cpp
     src/zcl_callbacks.cpp
+    ${ZEPHYR_NRF_MODULE_DIR}/samples/matter/common/src/persistent_storage/persistent_storage_util.cpp
 )
 
 if(CONFIG_THREAD_WIFI_SWITCHING)

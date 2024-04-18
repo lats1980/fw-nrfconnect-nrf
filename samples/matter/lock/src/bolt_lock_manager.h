@@ -82,6 +82,11 @@ private:
 	CredentialData mCredentialData[CONFIG_LOCK_NUM_CREDENTIALS];
 	EmberAfPluginDoorLockCredentialInfo mCredentials[CONFIG_LOCK_NUM_CREDENTIALS] = {};
 
+	uint8_t mTotalUsersCount;
+	uint8_t mTotalCredentialsCount;
+	bool RestoreUsers();
+	bool RestoreCredentials();
+
 	static BoltLockManager sLock;
 };
 
