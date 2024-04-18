@@ -72,7 +72,7 @@
 	}
 
 // This is an array of EmberAfAttributeMetadata structures.
-#define GENERATED_ATTRIBUTE_COUNT 197
+#define GENERATED_ATTRIBUTE_COUNT 198
 #define GENERATED_ATTRIBUTES                                                                                                          \
 	{                                                                                                                             \
 		/* Endpoint: 0, Cluster: Descriptor (server) */                                                                       \
@@ -486,7 +486,9 @@
 			{ ZAP_MIN_MAX_DEFAULTS_INDEX(3), 0x00000031, 1, ZAP_TYPE(INT8U),                                              \
 			  ZAP_ATTRIBUTE_MASK(MIN_MAX) | ZAP_ATTRIBUTE_MASK(WRITABLE) }, /* UserCodeTemporaryDisableTime               \
 											 */                                           \
-			{ ZAP_SIMPLE_DEFAULT(0), 0x00000033, 1, ZAP_TYPE(BOOLEAN),                                                    \
+			{ ZAP_SIMPLE_DEFAULT(1), 0x00000032, 1, ZAP_TYPE(BOOLEAN),                                                    \
+			  ZAP_ATTRIBUTE_MASK(WRITABLE) }, /* SendPINOverTheAir */                                                     \
+			{ ZAP_SIMPLE_DEFAULT(1), 0x00000033, 1, ZAP_TYPE(BOOLEAN),                                                    \
 			  ZAP_ATTRIBUTE_MASK(WRITABLE) }, /* RequirePINforRemoteOperation */                                          \
 			{ ZAP_SIMPLE_DEFAULT(0x181), 0x0000FFFC, 4, ZAP_TYPE(BITMAP32), 0 }, /* FeatureMap */                         \
 			{ ZAP_SIMPLE_DEFAULT(7), 0x0000FFFD, 2, ZAP_TYPE(INT16U), 0 }, /* ClusterRevision */                          \
@@ -848,8 +850,8 @@
       /* Endpoint: 1, Cluster: Door Lock (server) */ \
       .clusterId = 0x00000101, \
       .attributes = ZAP_ATTRIBUTE_INDEX(176), \
-      .attributeCount = 21, \
-      .clusterSize = 34, \
+      .attributeCount = 22, \
+      .clusterSize = 35, \
       .mask = ZAP_CLUSTER_MASK(SERVER) | ZAP_CLUSTER_MASK(ATTRIBUTE_CHANGED_FUNCTION) | ZAP_CLUSTER_MASK(SHUTDOWN_FUNCTION) | ZAP_CLUSTER_MASK(PRE_ATTRIBUTE_CHANGED_FUNCTION), \
       .functions = chipFuncArrayDoorLockServer, \
       .acceptedCommandList = ZAP_GENERATED_COMMANDS_INDEX( 53 ), \
@@ -866,7 +868,7 @@
 // This is an array of EmberAfEndpointType structures.
 #define GENERATED_ENDPOINT_TYPES                                                                                       \
 	{                                                                                                              \
-		{ ZAP_CLUSTER_INDEX(0), 15, 110 }, { ZAP_CLUSTER_INDEX(15), 3, 47 },                                   \
+		{ ZAP_CLUSTER_INDEX(0), 15, 110 }, { ZAP_CLUSTER_INDEX(15), 3, 48 },                                   \
 	}
 
 // Largest attribute size is needed for various buffers
@@ -879,7 +881,7 @@ static_assert(ATTRIBUTE_LARGEST <= CHIP_CONFIG_MAX_ATTRIBUTE_STORE_ELEMENT_SIZE,
 #define ATTRIBUTE_SINGLETONS_SIZE (35)
 
 // Total size of attribute storage
-#define ATTRIBUTE_MAX_SIZE (157)
+#define ATTRIBUTE_MAX_SIZE (158)
 
 // Number of fixed endpoints
 #define FIXED_ENDPOINT_COUNT (2)

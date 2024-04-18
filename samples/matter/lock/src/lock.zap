@@ -4712,6 +4712,22 @@
               "reportableChange": 0
             },
             {
+              "name": "SendPINOverTheAir",
+              "code": 50,
+              "mfgCode": null,
+              "side": "server",
+              "type": "boolean",
+              "included": 1,
+              "storageOption": "RAM",
+              "singleton": 0,
+              "bounded": 0,
+              "defaultValue": "1",
+              "reportable": 1,
+              "minInterval": 1,
+              "maxInterval": 65534,
+              "reportableChange": 0
+            },
+            {
               "name": "RequirePINforRemoteOperation",
               "code": 51,
               "mfgCode": null,
@@ -4721,7 +4737,7 @@
               "storageOption": "RAM",
               "singleton": 0,
               "bounded": 0,
-              "defaultValue": "0",
+              "defaultValue": "1",
               "reportable": 1,
               "minInterval": 1,
               "maxInterval": 65534,
@@ -4821,7 +4837,7 @@
       "networkId": 0
     },
     {
-      "endpointTypeName": "Anonymous Endpoint Type",
+      "endpointTypeName": "MA-doorlock",
       "endpointTypeIndex": 1,
       "profileId": 259,
       "endpointId": 1,

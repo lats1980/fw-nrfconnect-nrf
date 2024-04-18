@@ -53,6 +53,7 @@
     /* Cluster: Door Lock, Attribute: EnablePrivacyModeButton, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: WrongCodeEntryLimit, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: UserCodeTemporaryDisableTime, Privilege: view */ \
+    /* Cluster: Door Lock, Attribute: SendPINOverTheAir, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: RequirePINforRemoteOperation, Privilege: view */ \
 }
 
@@ -82,6 +83,7 @@
     /* Cluster: Door Lock, Attribute: EnablePrivacyModeButton, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: WrongCodeEntryLimit, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: UserCodeTemporaryDisableTime, Privilege: view */ \
+    /* Cluster: Door Lock, Attribute: SendPINOverTheAir, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: RequirePINforRemoteOperation, Privilege: view */ \
 }
 
@@ -111,6 +113,7 @@
     /* Cluster: Door Lock, Attribute: EnablePrivacyModeButton, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: WrongCodeEntryLimit, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: UserCodeTemporaryDisableTime, Privilege: view */ \
+    /* Cluster: Door Lock, Attribute: SendPINOverTheAir, Privilege: view */ \
     /* Cluster: Door Lock, Attribute: RequirePINforRemoteOperation, Privilege: view */ \
 }
 
@@ -133,6 +136,7 @@
     0x00000101, /* Cluster: Door Lock, Attribute: EnablePrivacyModeButton, Privilege: manage */ \
     0x00000101, /* Cluster: Door Lock, Attribute: WrongCodeEntryLimit, Privilege: administer */ \
     0x00000101, /* Cluster: Door Lock, Attribute: UserCodeTemporaryDisableTime, Privilege: administer */ \
+    0x00000101, /* Cluster: Door Lock, Attribute: SendPINOverTheAir, Privilege: administer */ \
     0x00000101, /* Cluster: Door Lock, Attribute: RequirePINforRemoteOperation, Privilege: administer */ \
 }
 
@@ -153,6 +157,7 @@
     0x0000002B, /* Cluster: Door Lock, Attribute: EnablePrivacyModeButton, Privilege: manage */ \
     0x00000030, /* Cluster: Door Lock, Attribute: WrongCodeEntryLimit, Privilege: administer */ \
     0x00000031, /* Cluster: Door Lock, Attribute: UserCodeTemporaryDisableTime, Privilege: administer */ \
+    0x00000032, /* Cluster: Door Lock, Attribute: SendPINOverTheAir, Privilege: administer */ \
     0x00000033, /* Cluster: Door Lock, Attribute: RequirePINforRemoteOperation, Privilege: administer */ \
 }
 
@@ -173,6 +178,7 @@
     kMatterAccessPrivilegeManage, /* Cluster: Door Lock, Attribute: EnablePrivacyModeButton, Privilege: manage */ \
     kMatterAccessPrivilegeAdminister, /* Cluster: Door Lock, Attribute: WrongCodeEntryLimit, Privilege: administer */ \
     kMatterAccessPrivilegeAdminister, /* Cluster: Door Lock, Attribute: UserCodeTemporaryDisableTime, Privilege: administer */ \
+    kMatterAccessPrivilegeAdminister, /* Cluster: Door Lock, Attribute: SendPINOverTheAir, Privilege: administer */ \
     kMatterAccessPrivilegeAdminister, /* Cluster: Door Lock, Attribute: RequirePINforRemoteOperation, Privilege: administer */ \
 }
 
