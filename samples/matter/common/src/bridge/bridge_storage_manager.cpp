@@ -6,20 +6,20 @@
 
 #include "bridge_storage_manager.h"
 
-namespace
+namespace Nrf
 {
 template <class T> bool LoadDataToObject(PersistentStorageNode *node, T &data)
 {
 	size_t readSize = 0;
 
-	bool result = PersistentStorage::Instance().Load(node, &data, sizeof(T), readSize);
+	bool result = Nrf::GetPersistentStorage().NonSecureLoad(node, &data, sizeof(T), readSize);
 
 	return result;
 }
 
 PersistentStorageNode CreateIndexNode(uint8_t bridgedDeviceIndex, PersistentStorageNode *parent)
 {
-	char index[BridgeStorageManager::kMaxIndexLength + 1] = { 0 };
+	char index[Nrf::BridgeStorageManager::kMaxIndexLength + 1] = { 0 };
 
 	snprintf(index, sizeof(index), "%d", bridgedDeviceIndex);
 
@@ -28,100 +28,100 @@ PersistentStorageNode CreateIndexNode(uint8_t bridgedDeviceIndex, PersistentStor
 
 } /* namespace */
 
-bool BridgeStorageManager::StoreBridgedDevicesCount(uint8_t count)
+bool Nrf::BridgeStorageManager::StoreBridgedDevicesCount(uint8_t count)
 {
-	return PersistentStorage::Instance().Store(&mBridgedDevicesCount, &count, sizeof(count));
+	return Nrf::GetPersistentStorage().NonSecureStore(&mBridgedDevicesCount, &count, sizeof(count));
 }
 
-bool BridgeStorageManager::LoadBridgedDevicesCount(uint8_t &count)
+bool Nrf::BridgeStorageManager::LoadBridgedDevicesCount(uint8_t &count)
 {
 	return LoadDataToObject(&mBridgedDevicesCount, count);
 }
 
-bool BridgeStorageManager::StoreBridgedDevicesIndexes(uint8_t *indexes, uint8_t count)
+bool Nrf::BridgeStorageManager::StoreBridgedDevicesIndexes(uint8_t *indexes, uint8_t count)
 {
 	if (!indexes) {
 		return false;
 	}
 
-	return PersistentStorage::Instance().Store(&mBridgedDevicesIndexes, indexes, count);
+	return Nrf::GetPersistentStorage().NonSecureStore(&mBridgedDevicesIndexes, indexes, count);
 }
 
-bool BridgeStorageManager::LoadBridgedDevicesIndexes(uint8_t *indexes, uint8_t maxCount, size_t &count)
+bool Nrf::BridgeStorageManager::LoadBridgedDevicesIndexes(uint8_t *indexes, uint8_t maxCount, size_t &count)
 {
 	if (!indexes) {
 		return false;
 	}
 
-	return PersistentStorage::Instance().Load(&mBridgedDevicesIndexes, indexes, maxCount, count);
+	return Nrf::GetPersistentStorage().NonSecureLoad(&mBridgedDevicesIndexes, indexes, maxCount, count);
 }
 
-bool BridgeStorageManager::StoreBridgedDeviceEndpointId(uint16_t endpointId, uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::StoreBridgedDeviceEndpointId(uint16_t endpointId, uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceEndpointId);
 
-	return PersistentStorage::Instance().Store(&id, &endpointId, sizeof(endpointId));
+	return Nrf::GetPersistentStorage().NonSecureStore(&id, &endpointId, sizeof(endpointId));
 }
 
-bool BridgeStorageManager::LoadBridgedDeviceEndpointId(uint16_t &endpointId, uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::LoadBridgedDeviceEndpointId(uint16_t &endpointId, uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceEndpointId);
 
 	return LoadDataToObject(&id, endpointId);
 }
 
-bool BridgeStorageManager::RemoveBridgedDeviceEndpointId(uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::RemoveBridgedDeviceEndpointId(uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceEndpointId);
 
-	return PersistentStorage::Instance().Remove(&id);
+	return Nrf::GetPersistentStorage().NonSecureRemove(&id);
 }
 
-bool BridgeStorageManager::StoreBridgedDeviceNodeLabel(const char *label, size_t labelLength,
+bool Nrf::BridgeStorageManager::StoreBridgedDeviceNodeLabel(const char *label, size_t labelLength,
 						       uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceNodeLabel);
 
-	return PersistentStorage::Instance().Store(&id, label, labelLength);
+	return Nrf::GetPersistentStorage().NonSecureStore(&id, label, labelLength);
 }
 
-bool BridgeStorageManager::LoadBridgedDeviceNodeLabel(char *label, size_t labelMaxLength, size_t &labelLength,
+bool Nrf::BridgeStorageManager::LoadBridgedDeviceNodeLabel(char *label, size_t labelMaxLength, size_t &labelLength,
 						      uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceNodeLabel);
 
-	return PersistentStorage::Instance().Load(&id, label, labelMaxLength, labelLength);
+	return Nrf::GetPersistentStorage().NonSecureLoad(&id, label, labelMaxLength, labelLength);
 }
 
-bool BridgeStorageManager::RemoveBridgedDeviceNodeLabel(uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::RemoveBridgedDeviceNodeLabel(uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceNodeLabel);
 
-	return PersistentStorage::Instance().Remove(&id);
+	return Nrf::GetPersistentStorage().NonSecureRemove(&id);
 }
 
-bool BridgeStorageManager::StoreBridgedDeviceType(uint16_t deviceType, uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::StoreBridgedDeviceType(uint16_t deviceType, uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceType);
 
-	return PersistentStorage::Instance().Store(&id, &deviceType, sizeof(deviceType));
+	return Nrf::GetPersistentStorage().NonSecureStore(&id, &deviceType, sizeof(deviceType));
 }
 
-bool BridgeStorageManager::LoadBridgedDeviceType(uint16_t &deviceType, uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::LoadBridgedDeviceType(uint16_t &deviceType, uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceType);
 
 	return LoadDataToObject(&id, deviceType);
 }
 
-bool BridgeStorageManager::RemoveBridgedDeviceType(uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::RemoveBridgedDeviceType(uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBridgedDeviceType);
 
-	return PersistentStorage::Instance().Remove(&id);
+	return Nrf::GetPersistentStorage().NonSecureRemove(&id);
 }
 
-bool BridgeStorageManager::StoreBridgedDevice(const MatterBridgedDevice *device, uint8_t index)
+bool Nrf::BridgeStorageManager::StoreBridgedDevice(const MatterBridgedDevice *device, uint8_t index)
 {
 	if (!device) {
 		return false;
@@ -139,24 +139,24 @@ bool BridgeStorageManager::StoreBridgedDevice(const MatterBridgedDevice *device,
 }
 
 #ifdef CONFIG_BRIDGED_DEVICE_BT
-bool BridgeStorageManager::StoreBtAddress(bt_addr_le_t addr, uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::StoreBtAddress(bt_addr_le_t addr, uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBtAddress);
 
-	return PersistentStorage::Instance().Store(&id, &addr, sizeof(addr));
+	return Nrf::GetPersistentStorage().NonSecureStore(&id, &addr, sizeof(addr));
 }
 
-bool BridgeStorageManager::LoadBtAddress(bt_addr_le_t &addr, uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::LoadBtAddress(bt_addr_le_t &addr, uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBtAddress);
 
 	return LoadDataToObject(&id, addr);
 }
 
-bool BridgeStorageManager::RemoveBtAddress(uint8_t bridgedDeviceIndex)
+bool Nrf::BridgeStorageManager::RemoveBtAddress(uint8_t bridgedDeviceIndex)
 {
 	PersistentStorageNode id = CreateIndexNode(bridgedDeviceIndex, &mBtAddress);
 
-	return PersistentStorage::Instance().Remove(&id);
+	return Nrf::GetPersistentStorage().NonSecureRemove(&id);
 }
 #endif

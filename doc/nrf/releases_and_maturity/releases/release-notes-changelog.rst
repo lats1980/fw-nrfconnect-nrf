@@ -86,7 +86,12 @@ Bluetooth mesh
 Matter
 ------
 
-|no_changes_yet_note|
+* Added:
+
+  * Support for merging the generated factory data HEX file with the firmware HEX file by using the devicetree configuration, when Partition Manager is not enabled in the project.
+  * Support for the unified Persistent Storage API, including the implementation of the PSA Persistent Storage.
+
+* Updated default MRP retry intervals for Thread devices to two seconds to reduce the number of spurious retransmissions in Thread networks.
 
 Matter fork
 +++++++++++
@@ -162,6 +167,16 @@ Thingy:53: Matter weather station
 
 Matter Bridge
 -------------
+
+* Added:
+
+   The :kconfig:option:`CONFIG_BRIDGE_BT_MAX_SCANNED_DEVICES` kconfig option to set the maximum number of scanned Bluetooth LE devices.
+   The :kconfig:option:`CONFIG_BRIDGE_BT_SCAN_TIMEOUT_MS` kconfig option to set the scan timeout.
+
+* Updated the implementation of the persistent storage to leverage ``NonSecure``-prefixed methods from the common Persistent Storage module.
+
+IPC radio firmware
+------------------
 
 |no_changes_yet_note|
 

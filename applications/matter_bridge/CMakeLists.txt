@@ -35,6 +35,7 @@ target_include_directories(app PRIVATE
     ${COMMON_ROOT}/src
     ${COMMON_ROOT}/src/bridge/
     ${COMMON_ROOT}/src/bridge/util
+    ${COMMON_ROOT}/src/persistent_storage/
     ${NLIO_ROOT}/include
     ${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/zzz_generated/app-common
 )
@@ -50,7 +51,6 @@ target_sources(app PRIVATE
     src/zap-generated/IMClusterCommandHandler.cpp
     src/zap-generated/callback-stub.cpp
     ${COMMON_ROOT}/src/led_widget.cpp
-    ${COMMON_ROOT}/src/persistent_storage_util.cpp
 )
 
 if(CONFIG_BRIDGED_DEVICE_BT)
@@ -121,6 +121,13 @@ endif()
 
 if(CONFIG_MCUMGR_TRANSPORT_BT)
     target_sources(app PRIVATE ${COMMON_ROOT}/src/dfu_over_smp.cpp)
+endif()
+
+if(CONFIG_NCS_SAMPLE_MATTER_PERSISTENT_STORAGE)
+    target_sources_ifdef(CONFIG_NCS_SAMPLE_MATTER_SETTINGS_STORAGE_BACKEND app PRIVATE
+            ${COMMON_ROOT}/src/persistent_storage/backends/persistent_storage_settings.cpp)
+    target_sources_ifdef(CONFIG_NCS_SAMPLE_MATTER_SECURE_STORAGE_BACKEND app PRIVATE
+            ${COMMON_ROOT}/src/persistent_storage/backends/persistent_storage_secure.cpp)
 endif()
 
 chip_configure_data_model(app

@@ -66,11 +66,11 @@ CHIP_ERROR StoreDevice(MatterBridgedDevice *device, BridgedDeviceDataProvider *p
 	bool deviceRefresh = false;
 
 	/* Check if a device is already present in the storage. */
-	if (BridgeStorageManager::Instance().LoadBridgedDeviceEndpointId(endpointId, index)) {
+	if (Nrf::BridgeStorageManager::Instance().LoadBridgedDeviceEndpointId(endpointId, index)) {
 		deviceRefresh = true;
 	}
 
-	if (!BridgeStorageManager::Instance().StoreBridgedDevice(device, index)) {
+	if (!Nrf::BridgeStorageManager::Instance().StoreBridgedDevice(device, index)) {
 		LOG_ERR("Failed to store bridged device");
 		return CHIP_ERROR_INTERNAL;
 	}
@@ -79,7 +79,7 @@ CHIP_ERROR StoreDevice(MatterBridgedDevice *device, BridgedDeviceDataProvider *p
 
 	bt_addr_le_t addr = bleProvider->GetBtAddress();
 
-	if (!BridgeStorageManager::Instance().StoreBtAddress(addr, index)) {
+	if (!Nrf::BridgeStorageManager::Instance().StoreBtAddress(addr, index)) {
 		LOG_ERR("Failed to store bridged device's Bluetooth address");
 		return CHIP_ERROR_INTERNAL;
 	}
@@ -93,12 +93,12 @@ CHIP_ERROR StoreDevice(MatterBridgedDevice *device, BridgedDeviceDataProvider *p
 			return err;
 		}
 
-		if (!BridgeStorageManager::Instance().StoreBridgedDevicesIndexes(indexes, count)) {
+		if (!Nrf::BridgeStorageManager::Instance().StoreBridgedDevicesIndexes(indexes, count)) {
 			LOG_ERR("Failed to store bridged devices indexes.");
 			return CHIP_ERROR_INTERNAL;
 		}
 
-		if (!BridgeStorageManager::Instance().StoreBridgedDevicesCount(count)) {
+		if (!Nrf::BridgeStorageManager::Instance().StoreBridgedDevicesCount(count)) {
 			LOG_ERR("Failed to store bridged devices count.");
 			return CHIP_ERROR_INTERNAL;
 		}
@@ -383,30 +383,30 @@ CHIP_ERROR BleBridgedDeviceFactory::RemoveDevice(int endpointId)
 	}
 
 	/* Update the current indexes list. */
-	if (!BridgeStorageManager::Instance().StoreBridgedDevicesIndexes(indexes, count)) {
+	if (!Nrf::BridgeStorageManager::Instance().StoreBridgedDevicesIndexes(indexes, count)) {
 		LOG_ERR("Failed to store bridged devices indexes.");
 		return CHIP_ERROR_INTERNAL;
 	}
 
-	if (!BridgeStorageManager::Instance().StoreBridgedDevicesCount(count)) {
+	if (!Nrf::BridgeStorageManager::Instance().StoreBridgedDevicesCount(count)) {
 		LOG_ERR("Failed to store bridged devices count.");
 		return CHIP_ERROR_INTERNAL;
 	}
 
-	if (!BridgeStorageManager::Instance().RemoveBridgedDeviceEndpointId(index)) {
+	if (!Nrf::BridgeStorageManager::Instance().RemoveBridgedDeviceEndpointId(index)) {
 		LOG_ERR("Failed to remove bridged device endpoint id.");
 		return CHIP_ERROR_INTERNAL;
 	}
 
 	/* Ignore error, as node label may not be present in the storage. */
-	BridgeStorageManager::Instance().RemoveBridgedDeviceNodeLabel(index);
+	Nrf::BridgeStorageManager::Instance().RemoveBridgedDeviceNodeLabel(index);
 
-	if (!BridgeStorageManager::Instance().RemoveBridgedDeviceType(index)) {
+	if (!Nrf::BridgeStorageManager::Instance().RemoveBridgedDeviceType(index)) {
 		LOG_ERR("Failed to remove bridged device type.");
 		return CHIP_ERROR_INTERNAL;
 	}
 
-	if (!BridgeStorageManager::Instance().RemoveBtAddress(index)) {
+	if (!Nrf::BridgeStorageManager::Instance().RemoveBtAddress(index)) {
 		LOG_ERR("Failed to remove bridged device Bluetooth address.");
 		return CHIP_ERROR_INTERNAL;
 	}

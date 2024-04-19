@@ -421,12 +421,12 @@ CHIP_ERROR AppTask::RestoreBridgedDevices()
 	uint8_t indexes[BridgeManager::kMaxBridgedDevices] = { 0 };
 	size_t indexesCount = 0;
 
-	if (!BridgeStorageManager::Instance().LoadBridgedDevicesCount(count)) {
+	if (!Nrf::BridgeStorageManager::Instance().LoadBridgedDevicesCount(count)) {
 		LOG_INF("No bridged devices to load from the storage.");
 		return CHIP_NO_ERROR;
 	}
 
-	if (!BridgeStorageManager::Instance().LoadBridgedDevicesIndexes(indexes, BridgeManager::kMaxBridgedDevices,
+	if (!Nrf::BridgeStorageManager::Instance().LoadBridgedDevicesIndexes(indexes, BridgeManager::kMaxBridgedDevices,
 									indexesCount)) {
 		return CHIP_NO_ERROR;
 	}
@@ -438,15 +438,15 @@ CHIP_ERROR AppTask::RestoreBridgedDevices()
 		size_t labelSize;
 		uint16_t deviceType;
 
-		if (!BridgeStorageManager::Instance().LoadBridgedDeviceEndpointId(endpointId, indexes[i])) {
+		if (!Nrf::BridgeStorageManager::Instance().LoadBridgedDeviceEndpointId(endpointId, indexes[i])) {
 			return CHIP_ERROR_NOT_FOUND;
 		}
 
 		/* Ignore an error, as node label is optional, so it may not be found. */
-		BridgeStorageManager::Instance().LoadBridgedDeviceNodeLabel(label, sizeof(label), labelSize,
+		Nrf::BridgeStorageManager::Instance().LoadBridgedDeviceNodeLabel(label, sizeof(label), labelSize,
 									    indexes[i]);
 
-		if (!BridgeStorageManager::Instance().LoadBridgedDeviceType(deviceType, indexes[i])) {
+		if (!Nrf::BridgeStorageManager::Instance().LoadBridgedDeviceType(deviceType, indexes[i])) {
 			return CHIP_ERROR_NOT_FOUND;
 		}
 
@@ -455,7 +455,7 @@ CHIP_ERROR AppTask::RestoreBridgedDevices()
 #ifdef CONFIG_BRIDGED_DEVICE_BT
 		bt_addr_le_t addr;
 
-		if (!BridgeStorageManager::Instance().LoadBtAddress(addr, indexes[i])) {
+		if (!Nrf::BridgeStorageManager::Instance().LoadBtAddress(addr, indexes[i])) {
 			return CHIP_ERROR_NOT_FOUND;
 		}
 

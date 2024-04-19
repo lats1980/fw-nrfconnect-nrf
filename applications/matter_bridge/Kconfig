@@ -97,7 +97,12 @@ endif
 config EXPERIMENTAL
 	default y
 
+config NCS_SAMPLE_MATTER_PERSISTENT_STORAGE
+	default y
+
 source "${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/config/nrfconnect/chip-module/Kconfig.features"
 source "${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/config/nrfconnect/chip-module/Kconfig.defaults"
+source "${ZEPHYR_BASE}/../nrf/samples/matter/common/src/Kconfig"
+source "${ZEPHYR_BASE}/../nrf/samples/matter/common/src/persistent_storage/Kconfig"
 source "${ZEPHYR_BASE}/../nrf/samples/matter/common/src/bridge/Kconfig"
 source "Kconfig.zephyr"
