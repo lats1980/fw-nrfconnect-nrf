@@ -35,9 +35,12 @@ include(${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/src/app/chip_data_model.cmake)
 target_include_directories(app PRIVATE
     src
     ${COMMON_ROOT}/src
+    ${COMMON_ROOT}/src/persistent_storage/
     ${NLIO_ROOT}/include
     ${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/zzz_generated/app-common
 )
+
+FILE(GLOB cred_srcs src/credentials/*.cpp)
 
 target_sources(app PRIVATE
     src/app_task.cpp
@@ -47,6 +50,7 @@ target_sources(app PRIVATE
     src/zap-generated/callback-stub.cpp
     src/zap-generated/IMClusterCommandHandler.cpp
     ${COMMON_ROOT}/src/led_widget.cpp
+    ${cred_srcs}
 )
 
 if(CONFIG_CHIP_OTA_REQUESTOR OR CONFIG_MCUMGR_TRANSPORT_BT)
@@ -72,6 +76,13 @@ endif()
 
 if(CONFIG_CHIP_ICD_SUBSCRIPTION_HANDLING)
     target_sources(app PRIVATE ${COMMON_ROOT}/src/icd_util.cpp)
+endif()
+
+if(CONFIG_NCS_SAMPLE_MATTER_PERSISTENT_STORAGE)
+    target_sources_ifdef(CONFIG_NCS_SAMPLE_MATTER_SETTINGS_STORAGE_BACKEND app PRIVATE
+            ${COMMON_ROOT}/src/persistent_storage/backends/persistent_storage_settings.cpp)
+    target_sources_ifdef(CONFIG_NCS_SAMPLE_MATTER_SECURE_STORAGE_BACKEND app PRIVATE
+            ${COMMON_ROOT}/src/persistent_storage/backends/persistent_storage_secure.cpp)
 endif()
 
 chip_configure_data_model(app

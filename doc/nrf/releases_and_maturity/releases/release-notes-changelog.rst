@@ -233,7 +233,11 @@ Keys samples
 Matter samples
 --------------
 
-|no_changes_yet_note|
+* Added:
+
+* :ref:`matter_lock_sample` sample:
+  * Added a door lock credentials manager module.
+    The module is used to implement support for refined handling and persistent storage of PIN codes.
 
 Multicore samples
 -----------------

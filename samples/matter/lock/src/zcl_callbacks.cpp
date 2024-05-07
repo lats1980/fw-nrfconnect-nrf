@@ -20,19 +20,22 @@ using namespace ::chip::app::Clusters::DoorLock;
 void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &attributePath, uint8_t type,
 				       uint16_t size, uint8_t *value)
 {
-	VerifyOrReturn(attributePath.mClusterId == DoorLock::Id &&
-		       attributePath.mAttributeId == DoorLock::Attributes::LockState::Id);
+	VerifyOrReturn(attributePath.mClusterId == DoorLock::Id);
 
-	/* Post events only if current lock state is different than given */
-	switch (*value) {
-	case to_underlying(DlLockState::kLocked):
-		BoltLockMgr().Lock(BoltLockManager::OperationSource::kRemote);
-		break;
-	case to_underlying(DlLockState::kUnlocked):
-		BoltLockMgr().Unlock(BoltLockManager::OperationSource::kRemote);
-		break;
-	default:
-		break;
+	if (attributePath.mAttributeId == DoorLock::Attributes::LockState::Id) {
+		/* Post events only if current lock state is different than given */
+		switch (*value) {
+		case to_underlying(DlLockState::kLocked):
+			BoltLockMgr().Lock(BoltLockManager::OperationSource::kRemote);
+			break;
+		case to_underlying(DlLockState::kUnlocked):
+			BoltLockMgr().Unlock(BoltLockManager::OperationSource::kRemote);
+			break;
+		default:
+			break;
+		}
+	} else if (attributePath.mAttributeId == DoorLock::Attributes::RequirePINforRemoteOperation::Id) {
+		BoltLockMgr().SetRequirePIN(*value);
 	}
 }
 
@@ -102,14 +105,17 @@ void emberAfDoorLockClusterInitCallback(EndpointId endpoint)
 	};
 
 	logOnFailure(DoorLock::Attributes::LockType::Set(endpoint, DlLockType::kDeadBolt), "type");
-	logOnFailure(DoorLock::Attributes::NumberOfTotalUsersSupported::Set(endpoint, CONFIG_LOCK_NUM_USERS),
+	logOnFailure(DoorLock::Attributes::NumberOfTotalUsersSupported::Set(endpoint, CONFIG_LOCK_MAX_NUM_USERS),
 		     "number of users");
-	logOnFailure(DoorLock::Attributes::NumberOfPINUsersSupported::Set(endpoint, CONFIG_LOCK_NUM_USERS),
+	logOnFailure(DoorLock::Attributes::NumberOfPINUsersSupported::Set(endpoint,
+									  CONFIG_LOCK_MAX_NUM_CREDENTIALS_PER_TYPE),
 		     "number of PIN users");
 	logOnFailure(DoorLock::Attributes::NumberOfRFIDUsersSupported::Set(endpoint, 0), "number of RFID users");
 	logOnFailure(DoorLock::Attributes::NumberOfCredentialsSupportedPerUser::Set(
-			     endpoint, CONFIG_LOCK_NUM_CREDENTIALS_PER_USER),
+			     endpoint, CONFIG_LOCK_MAX_NUM_CREDENTIALS_PER_USER),
 		     "number of credentials per user");
+	logOnFailure(DoorLock::Attributes::RequirePINforRemoteOperation::Set(endpoint, BoltLockMgr().GetRequirePIN()),
+		     "require PIN code for the remote operation");
 
 	AppTask::Instance().UpdateClusterState(BoltLockMgr().GetState(),
 					       BoltLockManager::OperationSource::kUnspecified);
