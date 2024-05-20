@@ -40,7 +40,16 @@ target_include_directories(app PRIVATE
     ${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/zzz_generated/app-common
 )
 
-FILE(GLOB cred_srcs src/credentials/*.cpp)
+SET(access_srcs src/access/access_data_types.cpp
+              src/access/access_manager_credentials.cpp
+              src/access/access_manager_users.cpp
+              src/access/access_manager.cpp
+              src/access/access_storage.cpp
+              )
+
+if(CONFIG_LOCK_SCHEDULES)
+    LIST(APPEND access_srcs src/access/access_manager_schedules.cpp)
+endif()
 
 target_sources(app PRIVATE
     src/app_task.cpp
@@ -50,7 +59,7 @@ target_sources(app PRIVATE
     src/zap-generated/callback-stub.cpp
     src/zap-generated/IMClusterCommandHandler.cpp
     ${COMMON_ROOT}/src/led_widget.cpp
-    ${cred_srcs}
+    ${access_srcs}
 )
 
 if(CONFIG_CHIP_OTA_REQUESTOR OR CONFIG_MCUMGR_TRANSPORT_BT)

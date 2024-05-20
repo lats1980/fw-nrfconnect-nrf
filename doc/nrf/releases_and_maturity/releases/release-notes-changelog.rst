@@ -237,7 +237,9 @@ Matter samples
 
 * :ref:`matter_lock_sample` sample:
   * Added a door lock credentials manager module.
+  * Added a door lock access manager module.
     The module is used to implement support for refined handling and persistent storage of PIN codes.
+  * Added the ::ref::`matter_lock_scheduled_timed_access` feature.
 
 Multicore samples
 -----------------
