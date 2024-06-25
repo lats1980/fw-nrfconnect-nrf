@@ -476,6 +476,7 @@ void AppTask::FunctionTimerEventHandler(const AppEvent &event)
 		sFactoryResetLEDs.Blink(LedConsts::kBlinkRate_ms);
 #endif
 	} else if (Instance().mFunction == FunctionEvent::FactoryReset) {
+		BoltLockMgr().ClearAllUserCredential();
 		/* Actually trigger Factory Reset */
 		Instance().mFunction = FunctionEvent::NoneSelected;
 		chip::Server::GetInstance().ScheduleFactoryReset();

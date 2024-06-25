@@ -58,6 +58,7 @@ public:
 	bool SetCredential(uint16_t credentialIndex, chip::FabricIndex creator, chip::FabricIndex modifier,
 			   DlCredentialStatus credentialStatus, CredentialTypeEnum credentialType,
 			   const chip::ByteSpan &secret);
+	bool ClearAllUserCredential();
 
 #ifdef CONFIG_LOCK_SCHEDULES
 	DlStatus GetWeekDaySchedule(uint8_t weekdayIndex, uint16_t userIndex,
@@ -81,6 +82,11 @@ public:
 
 	void SetRequirePIN(bool require);
 	bool GetRequirePIN();
+
+#ifdef CONFIG_LOCK_ENABLE_DEBUG
+	bool PrintUserdata(uint8_t userIndex);
+	bool PrintCredential(CredentialTypeEnum type, uint16_t index);
+#endif
 
 private:
 	using AccessMgr = AccessManager<DoorLockData::PIN>;

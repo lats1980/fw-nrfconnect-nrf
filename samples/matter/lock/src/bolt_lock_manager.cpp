@@ -51,6 +51,29 @@ bool BoltLockManager::SetCredential(uint16_t credentialIndex, FabricIndex creato
 						    credentialType, secret);
 }
 
+bool BoltLockManager::ClearAllUserCredential()
+{
+	bool ret;
+	CredentialStruct credential{ (CredentialTypeEnum)0, 0 };
+
+	for (size_t idxUsr = 0; idxUsr < CONFIG_LOCK_MAX_NUM_USERS; ++idxUsr) {
+		ret = AccessMgr::Instance().SetUser(idxUsr + 1, 0, 0, chip::CharSpan(), 0, UserStatusEnum::kAvailable, UserTypeEnum::kUnrestrictedUser,
+											CredentialRuleEnum::kSingle, &credential, 0);
+		if (!ret) {
+			return false;
+		}
+	}
+	for (size_t idxCred = 0; idxCred < CONFIG_LOCK_MAX_NUM_CREDENTIALS_PER_TYPE; ++idxCred) {
+		ret = AccessMgr::Instance().SetCredential(idxCred + 1, 0, 0, DlCredentialStatus::kAvailable,
+												  CredentialTypeEnum::kPin, chip::ByteSpan());
+		if (!ret) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 #ifdef CONFIG_LOCK_SCHEDULES
 
 DlStatus BoltLockManager::GetWeekDaySchedule(uint8_t weekdayIndex, uint16_t userIndex,
@@ -107,6 +130,24 @@ bool BoltLockManager::GetRequirePIN()
 {
 	return AccessMgr::Instance().GetRequirePIN();
 }
+
+#ifdef CONFIG_LOCK_ENABLE_DEBUG
+bool BoltLockManager::PrintUserdata(uint8_t userIndex)
+{
+	/* userIndex is guaranteed by the caller to be between 1 and CONFIG_LOCK_MAX_NUM_USERS */
+	VerifyOrReturnError(userIndex > 0 && userIndex <= CONFIG_LOCK_MAX_NUM_USERS, false);
+	AccessMgr::Instance().PrintUser(userIndex);
+	return true;
+}
+
+bool BoltLockManager::PrintCredential(CredentialTypeEnum type, uint16_t credentialIndex)
+{
+	/* credentialIndex is guaranteed by the caller to be between 1 and CONFIG_LOCK_MAX_NUM_CREDENTIALS_PER_TYPE */
+	VerifyOrReturnError(credentialIndex > 0 && credentialIndex <= CONFIG_LOCK_MAX_NUM_CREDENTIALS_PER_TYPE, false);
+	AccessMgr::Instance().PrintCredential(type, credentialIndex);
+	return true;
+}
+#endif//CONFIG_LOCK_ENABLE_DEBUG
 
 void BoltLockManager::Lock(OperationSource source)
 {

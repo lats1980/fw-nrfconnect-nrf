@@ -62,6 +62,11 @@ target_sources(app PRIVATE
     ${access_srcs}
 )
 
+zephyr_library_sources_ifdef(
+	CONFIG_MATTER_LOCK_SHELL
+	src/matter_lock_shell.cpp
+)
+
 if(CONFIG_CHIP_OTA_REQUESTOR OR CONFIG_MCUMGR_TRANSPORT_BT)
     target_sources(app PRIVATE ${COMMON_ROOT}/src/ota_util.cpp)
 endif()
