@@ -114,8 +114,6 @@ void emberAfDoorLockClusterInitCallback(EndpointId endpoint)
 	logOnFailure(DoorLock::Attributes::NumberOfCredentialsSupportedPerUser::Set(
 			     endpoint, CONFIG_LOCK_MAX_NUM_CREDENTIALS_PER_USER),
 		     "number of credentials per user");
-	logOnFailure(DoorLock::Attributes::RequirePINforRemoteOperation::Set(endpoint, BoltLockMgr().GetRequirePIN()),
-		     "require PIN code for the remote operation");
 
 #ifdef CONFIG_LOCK_SCHEDULES
 	logOnFailure(DoorLock::Attributes::NumberOfWeekDaySchedulesSupportedPerUser::Set(
