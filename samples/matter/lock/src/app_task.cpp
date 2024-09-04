@@ -78,6 +78,7 @@ constexpr EndpointId kLockEndpointId = 1;
 #if NUMBER_OF_BUTTONS == 2
 constexpr uint32_t kAdvertisingTriggerTimeout = 3000;
 #endif
+constexpr uint32_t kSubscriptionFabricVerifierTimeout = 3;
 
 #ifdef CONFIG_CHIP_NUS
 constexpr uint16_t kAdvertisingIntervalMin = 400;
@@ -132,6 +133,79 @@ app::Clusters::NetworkCommissioning::Instance
 	sWiFiCommissioningInstance(0, &(NetworkCommissioning::NrfWiFiDriver::Instance()));
 #endif
 
+static void set_ps_mode_work_handler(struct k_work *work);
+K_WORK_DELAYABLE_DEFINE(set_ps_mode_work, set_ps_mode_work_handler);
+
+static void set_wifi_listen_interval(void)
+{
+	struct net_if *iface = net_if_get_first_wifi();
+	struct wifi_ps_params params = { .enabled = WIFI_PS_DISABLED };
+	int err;
+
+	params.listen_interval = 10;
+	params.type = WIFI_PS_PARAM_LISTEN_INTERVAL;
+
+	err = net_mgmt(NET_REQUEST_WIFI_PS, iface, &params, sizeof(params));
+	if (err) {
+			LOG_INF("set_wifi_listen_interval err:%d", err);
+	} else {
+			LOG_INF("set_wifi_listen_interval done");
+	}
+}
+
+static void set_wifi_ps_wakeup_mode(bool enable)
+{
+	struct net_if *iface = net_if_get_first_wifi();
+	struct wifi_ps_params params = { .enabled = WIFI_PS_DISABLED };
+
+	int err;
+	if (enable) {
+		params.wakeup_mode = WIFI_PS_WAKEUP_MODE_LISTEN_INTERVAL;
+	} else {
+		params.wakeup_mode = WIFI_PS_WAKEUP_MODE_DTIM;
+	}
+	params.type = WIFI_PS_PARAM_WAKEUP_MODE;
+	err = net_mgmt(NET_REQUEST_WIFI_PS, iface, &params, sizeof(params));
+	if (err) {
+			LOG_INF("set_wifi_ps_wakeup_mode: %d err:%d", enable, err);
+	} else {
+			LOG_INF("set_wifi_ps_wakeup_mode: %d done", enable);
+	}
+}
+
+static void set_ps_mode_work_handler(struct k_work *work)
+{
+	uint32_t totalFabricCount = 0, activeFabricCount = 0, activeSubscriptions = 0;
+
+	activeSubscriptions = chip::app::InteractionModelEngine::GetInstance()->GetNumActiveReadHandlers(chip::app::ReadHandler::InteractionType::Subscribe);
+	totalFabricCount = chip::Server::GetInstance().GetFabricTable().FabricCount();
+	LOG_INF("Active subscriptors: %d", activeSubscriptions);
+	LOG_INF("Total Fabric count: %d", totalFabricCount);
+	/* Check the current fabric count */
+	for (int i = 0; i < UINT8_MAX; i++) {
+		const auto * fabricInfo = chip::Server::GetInstance().GetFabricTable().FindFabricWithIndex(i);
+		if (fabricInfo != nullptr) {
+			/* Apple occupies 2 slots in fabric table (0x1349 and 0x1384) */
+			/* As a workarount to count correct active fabric, ignore VID 0x1349 */
+			if (fabricInfo->GetVendorId() == 0x1384) {
+				LOG_INF("Ignore the Apple fabric of Apple keychain");
+				continue;
+			}
+			activeFabricCount++;
+		}
+	}
+	LOG_INF("Active Fabric count: %d", activeFabricCount);
+	if (activeFabricCount > 0) {
+		/* Enter listen interval power save mode if number of active subscription equals to fabric count */
+		if (activeFabricCount != activeSubscriptions) {
+			set_wifi_ps_wakeup_mode(false);
+		} else {
+			set_wifi_ps_wakeup_mode(true);
+		}
+	}
+	k_work_reschedule(&set_ps_mode_work, K_SECONDS(kSubscriptionFabricVerifierTimeout));
+}
+
 CHIP_ERROR AppTask::Init()
 {
 	/* Initialize CHIP stack */
@@ -148,7 +222,7 @@ CHIP_ERROR AppTask::Init()
 		LOG_ERR("PlatformMgr().InitChipStack() failed");
 		return err;
 	}
-
+	set_wifi_listen_interval();
 #if defined(CONFIG_NET_L2_OPENTHREAD)
 	err = ThreadStackMgr().InitThreadStack();
 	if (err != CHIP_NO_ERROR) {
@@ -575,6 +649,7 @@ void AppTask::UpdateStatusLED()
 	 * Otherwise, blink the LED for a very short time. */
 	if (sIsNetworkProvisioned && sIsNetworkEnabled) {
 		sStatusLED.Set(true);
+		k_work_reschedule(&set_ps_mode_work, K_SECONDS(kSubscriptionFabricVerifierTimeout));
 	} else if (sHaveBLEConnections) {
 		sStatusLED.Blink(LedConsts::StatusLed::Unprovisioned::kOn_ms,
 				 LedConsts::StatusLed::Unprovisioned::kOff_ms);
