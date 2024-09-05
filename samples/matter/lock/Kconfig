@@ -102,6 +102,10 @@ endif # CHIP_WIFI
 config CHIP_ICD_SUBSCRIPTION_HANDLING
 	default y
 
+config CHIP_MAX_ALLOWED_SUBSCRIPTION_REPORT_INTERVAL
+	int
+	default 60
+
 source "${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/config/nrfconnect/chip-module/Kconfig.features"
 source "${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/config/nrfconnect/chip-module/Kconfig.defaults"
 source "Kconfig.zephyr"
