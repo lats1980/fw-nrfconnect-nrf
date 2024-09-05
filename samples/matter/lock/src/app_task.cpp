@@ -176,11 +176,19 @@ static void set_wifi_ps_wakeup_mode(bool enable)
 static void set_ps_mode_work_handler(struct k_work *work)
 {
 	uint32_t totalFabricCount = 0, activeFabricCount = 0, activeSubscriptions = 0;
+	bool isCommissioningWindowOpen = false;
 
 	activeSubscriptions = chip::app::InteractionModelEngine::GetInstance()->GetNumActiveReadHandlers(chip::app::ReadHandler::InteractionType::Subscribe);
 	totalFabricCount = chip::Server::GetInstance().GetFabricTable().FabricCount();
+	isCommissioningWindowOpen = Server::GetInstance().GetCommissioningWindowManager().IsCommissioningWindowOpen();
 	LOG_INF("Active subscriptors: %d", activeSubscriptions);
 	LOG_INF("Total Fabric count: %d", totalFabricCount);
+	LOG_INF("Commissioning window open: %d", isCommissioningWindowOpen);
+	if (isCommissioningWindowOpen) {
+		set_wifi_ps_wakeup_mode(false);
+		k_work_reschedule(&set_ps_mode_work, K_SECONDS(kSubscriptionFabricVerifierTimeout));
+		return;
+	}
 	/* Check the current fabric count */
 	for (int i = 0; i < UINT8_MAX; i++) {
 		const auto * fabricInfo = chip::Server::GetInstance().GetFabricTable().FindFabricWithIndex(i);
