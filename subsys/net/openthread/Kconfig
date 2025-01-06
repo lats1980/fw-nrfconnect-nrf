@@ -131,3 +131,5 @@ endchoice
 endmenu
 
 endif
+
+rsource "report/Kconfig"

@@ -6,3 +6,4 @@
 
 add_subdirectory(lib)
 add_subdirectory_ifdef(CONFIG_L2_WIFI_CONNECTIVITY l2_wifi_if_conn)
+add_subdirectory_ifdef(CONFIG_OPENTHREAD_REPORT openthread/report)
