@@ -6,11 +6,11 @@ zephyr_library_sources(
   entropy.c
   misc.c
   platform.c
-  radio.c
   spi.c
   )
 
-
+zephyr_library_sources_ifndef(CONFIG_OPENTHREAD_OVER_DECTNR_PHY radio.c)
+zephyr_library_sources_ifdef(CONFIG_OPENTHREAD_OVER_DECTNR_PHY radio_dectnr.c)
 zephyr_library_sources_ifdef(CONFIG_OPENTHREAD_BLE_TCAT ble.c)
 zephyr_library_sources_ifdef(CONFIG_OPENTHREAD_DIAG diag.c)
 zephyr_library_sources_ifdef(CONFIG_OPENTHREAD_COPROCESSOR uart.c)

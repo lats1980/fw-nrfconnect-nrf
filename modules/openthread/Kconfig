@@ -16,4 +16,8 @@ menu "Thread Network configuration"
 rsource "Kconfig.thread"
 endmenu
 
+menu "DECT NR+ radio configuration"
+rsource "Kconfig.dectnr"
+endmenu
+
 endif # OPENTHREAD

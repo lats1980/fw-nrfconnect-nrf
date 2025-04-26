@@ -1,0 +1,39 @@
+config OPENTHREAD_OVER_DECTNR_PHY
+	bool "Support for OpenThread over DECT NR+ PHY"
+	select NRF_MODEM_LIB
+	select HWINFO
+
+config OPENTHREAD_OVER_DECTNR_PHY_FREQUENCY
+	int "Openthread DECT NR PHY frequency"
+	default 531
+	help
+	  The absolute channel frequency number for the transmission.
+	  See 5.4.2 of DECT-SPEC "DECT-2020 NR Part 2".
+
+config OPENTHREAD_OVER_DECTNR_DEFAULT_TX_MCS
+	int "Default transmission MCS"
+	default 0
+	help
+	  The default transmission MCS (Modulation and Coding Scheme) for the PHY.
+
+config OPENTHREAD_OVER_DECTNR_DEFAULT_TX_POWER
+	int "Default transmission power level"
+	default 13
+
+config OPENTHREAD_OVER_DECTNR_RSSI_LEVEL
+	int "Expected antenna signal level of the reception."
+	default -103
+
+config OPENTHREAD_OVER_DECTNR_LBT_THRESHOLD_MAX
+	int "The listen before talk maximum RSSI threshold, in dBm."
+	default -80
+	help
+	  See 5.1.2 of DECT-SPEC "DECT-2020 NR Part 4".
+
+config DECT_RX_STACK_SIZE
+	int "DECT RX stack size"
+	default 800
+
+config OT_DECT_RX_BUFFERS
+	int "OpenThread over DECT NR+ PHY receive buffers"
+	default 16
