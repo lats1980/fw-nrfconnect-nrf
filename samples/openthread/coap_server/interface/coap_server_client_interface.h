@@ -8,6 +8,7 @@
 #define __COAP_SERVER_CLIENT_INTRFACE_H__
 
 #define COAP_PORT 5683
+#define TRACEROUTE_INIT_ADDR 0xFFFF
 
 /**@brief Enumeration describing light commands. */
 enum light_command {
@@ -18,5 +19,6 @@ enum light_command {
 
 #define PROVISIONING_URI_PATH "provisioning"
 #define LIGHT_URI_PATH "light"
+#define TRACEROUTE_URI_PATH "traceroute"
 
 #endif
