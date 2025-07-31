@@ -405,3 +405,9 @@ config OPENTHREAD_VERHOEFF_CHECKSUM
 
 config OPENTHREAD_CLI_VENDOR_EXTENSION
 	string "Path to CMake file to define and link Openthread CLI vendor extension"
+
+config OPENTHREAD_HARDWARE_AES_CCM
+	bool "Hardware AES CCM support"
+	help
+	  Enable hardware AES CCM support for OpenThread. This requires a
+	  hardware crypto backend that supports AES CCM.

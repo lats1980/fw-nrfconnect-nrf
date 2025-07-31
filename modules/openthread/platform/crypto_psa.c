@@ -173,6 +173,10 @@ static psa_key_type_t toPsaKeyType(otCryptoKeyType aType)
 static psa_algorithm_t toPsaAlgorithm(otCryptoKeyAlgorithm aAlgorithm)
 {
 	switch (aAlgorithm) {
+#if defined(CONFIG_OPENTHREAD_HARDWARE_AES_CCM)
+	case OT_CRYPTO_KEY_ALG_AES_CCM_TAG4:
+		return PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_CCM, 4);
+#endif
 	case OT_CRYPTO_KEY_ALG_AES_ECB:
 		return PSA_ALG_ECB_NO_PADDING;
 	case OT_CRYPTO_KEY_ALG_HMAC_SHA_256:

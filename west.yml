@@ -35,6 +35,9 @@ manifest:
       url-base: https://github.com/boschsensortec
     - name: eembc
       url-base: https://github.com/eembc
+    # Personal repositories for OpenThread development
+    - name: lats1980
+      url-base: https://github.com/lats1980
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -227,7 +230,8 @@ manifest:
     - name: openthread
       repo-path: sdk-openthread
       path: modules/lib/openthread
-      revision: ncs-thread-reference-20250402
+      revision: PoC/Hardware-AES-CCM
+      remote: lats1980
       userdata:
         ncs:
           upstream-url: https://github.com/openthread/openthread
