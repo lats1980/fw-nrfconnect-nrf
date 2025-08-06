@@ -87,7 +87,6 @@ typedef struct ot_dectnr_rx_frame_t {
     void *fifo_reserved; /* 1st word reserved for use by fifo. */
     enum ot_dectnr_rx_frame_status status; /* Frame status */
     struct nrf_modem_dect_phy_pcc_event pcc_info;
-    uint8_t length;
     uint8_t data[DECT_DATA_MAX_LEN];
     int16_t rssi_2;
     int16_t snr;
@@ -844,7 +843,7 @@ static void dect_rx_thread(void *arg1, void *arg2, void *arg3)
 {
     struct net_pkt *pkt;
     ot_dectnr_rx_frame *rx_frame;
-    uint8_t pkt_len = 0;
+    uint16_t pkt_len = 0;
 
     ARG_UNUSED(arg2);
     ARG_UNUSED(arg3);
@@ -887,7 +886,7 @@ static void dect_rx_thread(void *arg1, void *arg2, void *arg3)
             }
         }
 
-        pkt_len = *(uint8_t *)((uint8_t *)rx_frame->data + OT_DECTNR_UNICAST_SEQUENCE_SIZE);
+        pkt_len = *(uint16_t *)((uint8_t *)rx_frame->data + OT_DECTNR_UNICAST_SEQUENCE_SIZE);
         if (pkt_len > OT_RADIO_FRAME_MAX_SIZE || pkt_len == 0) {
             LOG_ERR("Invalid PSDU length: %hu", pkt_len);
             goto drop;
@@ -1381,7 +1380,7 @@ static int send_mac_broadcast_frame(struct otRadioFrame *ot_transmit_frame)
         if (!tx_processes[i].tx_in_progress) {
             tx_processes[i].dect_data_size = OT_DECTNR_BEACON_TYPE_SIZE + IEEE802154_PHY_HEADER_SIZE + ot_transmit_frame->mLength;
             tx_processes[i].data[0] = OT_DECTNR_BEACON_TYPE_OT_MAC_BROADCAST_FRAME;
-            tx_processes[i].data[1] = (uint8_t)ot_transmit_frame->mLength;
+            *(uint16_t *)(tx_processes[i].data + OT_DECTNR_BEACON_TYPE_SIZE) = ot_transmit_frame->mLength;
             memcpy(tx_processes[i].data + OT_DECTNR_BEACON_TYPE_SIZE + IEEE802154_PHY_HEADER_SIZE, ot_transmit_frame->mPsdu, ot_transmit_frame->mLength);
             tx_processes[i].tx_in_progress = true;
             k_work_reschedule(&tx_processes[i].tx_process_work, K_NO_WAIT);
@@ -1469,10 +1468,10 @@ static int process_mac_unicast_tx_frame(struct otRadioFrame *ot_transmit_frame, 
     LOG_ERR("Cannot find device ID: %hu in the table", tx_process->dect_receiver_device_id);
     return -EINVAL;
 processed:
-    tx_process->dect_data_size = sizeof(sequence_number) + ot_transmit_frame->mLength + IEEE802154_PHY_HEADER_SIZE;
+    tx_process->dect_data_size = OT_DECTNR_UNICAST_SEQUENCE_SIZE + IEEE802154_PHY_HEADER_SIZE + ot_transmit_frame->mLength;
     tx_process->data[0] = sequence_number;
-    tx_process->data[1] = (uint8_t)ot_transmit_frame->mLength;
-    memcpy(tx_process->data + IEEE802154_PHY_HEADER_SIZE + sizeof(sequence_number), ot_transmit_frame->mPsdu, ot_transmit_frame->mLength);
+    *(uint16_t *)(tx_process->data + OT_DECTNR_UNICAST_SEQUENCE_SIZE) = ot_transmit_frame->mLength;
+    memcpy(tx_process->data + OT_DECTNR_UNICAST_SEQUENCE_SIZE + IEEE802154_PHY_HEADER_SIZE, ot_transmit_frame->mPsdu, ot_transmit_frame->mLength);
     return 0;
 }
 

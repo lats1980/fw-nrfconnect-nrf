@@ -230,7 +230,7 @@ manifest:
     - name: openthread
       repo-path: sdk-openthread
       path: modules/lib/openthread
-      revision: PoC/Hardware-AES-CCM
+      revision: v3.0.0-otdectnr-throughput
       remote: lats1980
       userdata:
         ncs:
